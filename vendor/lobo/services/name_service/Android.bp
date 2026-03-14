@@ -25,7 +25,7 @@ cc_binary {
     init_rc: ["name_service.rc"],
 }
 
-android_library {
+java_library {
     name: "NameServiceJavaClient",
     vendor: true,
     srcs: ["java/src/main/java/**/*.kt"],
