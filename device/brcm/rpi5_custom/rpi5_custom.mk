@@ -1,5 +1,5 @@
-# Inherit everything from the upstream rpi5 product
-$(call inherit-product, device/brcm/rpi5/device.mk)
+# Inherit the full upstream rpi5 product (includes full_base.mk, overlays, permissions)
+$(call inherit-product, device/brcm/rpi5/aosp_rpi5.mk)
 
 PRODUCT_NAME         := rpi5_custom
 PRODUCT_DEVICE       := rpi5_custom
