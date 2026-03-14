@@ -38,7 +38,6 @@ cc_binary {
     header_libs: [
         "liblobo_types_headers",
     ],
-    init_rc: ["fancontrol.rc"],
 }
 
 cc_test {

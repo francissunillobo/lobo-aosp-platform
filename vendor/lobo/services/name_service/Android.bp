@@ -22,7 +22,6 @@ cc_binary {
         "cpp/client/include",
     ],
     shared_libs: ["libbase", "libbinder", "liblog", "libutils"],
-    init_rc: ["name_service.rc"],
 }
 
 java_library {
