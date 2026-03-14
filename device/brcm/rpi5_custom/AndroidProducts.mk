@@ -1,7 +1,7 @@
 PRODUCT_MAKEFILES := \
-    $(LOCAL_DIR)/device.mk
+    $(LOCAL_DIR)/rpi5_custom.mk
 
 COMMON_LUNCH_CHOICES := \
-    rpi5_custom-userdebug \
-    rpi5_custom-user \
-    rpi5_custom-eng
+    rpi5_custom-trunk_staging-userdebug \
+    rpi5_custom-trunk_staging-user \
+    rpi5_custom-trunk_staging-eng
