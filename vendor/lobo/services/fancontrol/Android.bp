@@ -1,0 +1,48 @@
+aidl_interface {
+    name: "lobo_fancontrol_aidl",
+    vendor: true,
+    srcs: ["aidl/**/*.aidl"],
+    stability: "vintf",
+    backend: {
+        cpp: { enabled: true },
+        java: { enabled: true },
+    },
+}
+
+cc_binary {
+    name: "FanControlService",
+    vendor: true,
+    srcs: [
+        "core/src/main.cpp",
+        "core/src/FanService.cpp",
+        "core/src/FanController.cpp",
+        "core/src/ThermalConfig.cpp",
+        "hal_bridge/src/FanHalBridge.cpp",
+        "thermal/src/ThermalPolicy.cpp",
+    ],
+    local_include_dirs: [
+        "core/include",
+        "hal_bridge/include",
+        "thermal/include",
+    ],
+    shared_libs: [
+        "libbase",
+        "libbinder",
+        "liblog",
+        "libutils",
+    ],
+    static_libs: [
+        "liblobo_logging",
+        "liblobo_fan_math",
+        "liblobo_types_headers",
+    ],
+    init_rc: ["fancontrol.rc"],
+}
+
+cc_test {
+    name: "FanControlServiceTest",
+    vendor: true,
+    srcs: ["tests/src/FanServiceTest.cpp"],
+    local_include_dirs: ["core/include"],
+    static_libs: ["liblobo_fan_math"],
+}

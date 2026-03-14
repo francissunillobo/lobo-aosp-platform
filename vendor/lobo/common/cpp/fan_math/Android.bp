@@ -1,0 +1,14 @@
+cc_library_static {
+    name: "liblobo_fan_math",
+    vendor: true,
+    srcs: ["src/FanMath.cpp"],
+    export_include_dirs: ["include"],
+    cflags: ["-Wall", "-Werror"],
+}
+
+cc_test {
+    name: "liblobo_fan_math_test",
+    vendor: true,
+    srcs: ["tests/src/FanMathTest.cpp"],
+    static_libs: ["liblobo_fan_math"],
+}

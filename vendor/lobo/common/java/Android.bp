@@ -1,0 +1,7 @@
+android_library {
+    name: "lobo-common-java",
+    vendor: true,
+    srcs: ["src/main/java/**/*.kt"],
+    sdk_version: "current",
+    min_sdk_version: "33",
+}

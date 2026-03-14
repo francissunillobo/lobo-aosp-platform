@@ -1,0 +1,5 @@
+cc_library_headers {
+    name: "lobo_hal_interfaces",
+    vendor: true,
+    export_include_dirs: ["include"],
+}

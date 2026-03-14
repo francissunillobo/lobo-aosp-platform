@@ -1,0 +1,19 @@
+aidl_interface {
+    name: "lobo_fansettings_aidl",
+    vendor: true,
+    srcs: ["aidl/**/*.aidl"],
+    stability: "vintf",
+    backend: {
+        java: { enabled: true },
+        cpp: { enabled: false },
+    },
+}
+
+android_app {
+    name: "FanSettingsService",
+    vendor: true,
+    srcs: ["src/main/java/**/*.kt"],
+    sdk_version: "current",
+    min_sdk_version: "33",
+    certificate: "platform",
+}

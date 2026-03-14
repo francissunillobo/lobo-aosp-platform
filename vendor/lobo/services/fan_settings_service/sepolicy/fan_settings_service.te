@@ -1,0 +1,4 @@
+type fan_settings_service, domain;
+type fan_settings_service_exec, exec_type, vendor_file_type, file_type;
+
+app_domain(fan_settings_service)
