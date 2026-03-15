@@ -3,6 +3,7 @@ cc_library_static {
     vendor: true,
     srcs: ["src/Logging.cpp"],
     export_include_dirs: ["include"],
+    shared_libs: ["liblog"],
     cflags: ["-Wall", "-Werror"],
 }
 
