@@ -1,5 +1,5 @@
 #include <lobo/platform/logging/Logging.h>
-#include <android/log.h>
+#include <log/log.h>
 
 namespace lobo {
 namespace platform {
