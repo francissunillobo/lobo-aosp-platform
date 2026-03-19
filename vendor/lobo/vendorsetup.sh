@@ -1,4 +1,3 @@
-# Allow the build system file scanner to follow symlinks.
-# Required because vendor/lobo and vendor/projects/* are symlinks
-# into lobo-aosp-platform which lives outside the AOSP tree.
-export ALLOW_BP_UNDER_SYMLINKS=true
+# Lobo AOSP Platform — vendorsetup.sh
+# vendor/lobo and vendor/projects/* are bind-mounted (not symlinks),
+# so no special scanner flags are needed.
