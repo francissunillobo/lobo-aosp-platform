@@ -1,4 +1,4 @@
-# Lobo platform lunch combos
-add_lunch_combo rpi5_custom-trunk_staging-userdebug
-add_lunch_combo rpi5_custom-trunk_staging-user
-add_lunch_combo rpi5_custom-trunk_staging-eng
+# Allow the build system file scanner to follow symlinks.
+# Required because vendor/lobo and vendor/projects/* are symlinks
+# into lobo-aosp-platform which lives outside the AOSP tree.
+export ALLOW_BP_UNDER_SYMLINKS=true
