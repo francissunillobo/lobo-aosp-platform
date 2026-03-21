@@ -195,7 +195,7 @@ grep -E "error:|FAILED" ~/build-android16.log | head -50
 | | |
 |---|---|
 | Provider | Hetzner Dedicated |
-| IP | 148.251.152.29 |
+| IP | See private server notes |
 | SSH alias | `lobo-hetzner` |
 | CPU | Intel Xeon E5-1650 v3 (6 cores / 12 threads) |
 | RAM | 64 GB ECC |

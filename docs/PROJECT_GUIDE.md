@@ -50,7 +50,7 @@ practical — the full build takes 3-6 hours and requires ~200 GB of disk space.
 | Property | Value |
 |---|---|
 | Provider | Hetzner Dedicated (Server Auction) |
-| IP | 148.251.152.29 |
+| IP | See private server notes |
 | SSH alias | `lobo-hetzner` |
 | CPU | Intel Xeon E5-1650 v3 (6 cores / 12 threads @ 3.5 GHz) |
 | RAM | 64 GB ECC |
@@ -519,7 +519,7 @@ free -h
 Run on your **local Linux machine** (not the server):
 ```bash
 rsync -avz --progress \
-  root@148.251.152.29:/root/lobo-aosp/raspi5-aosp/out/target/product/rpi5/RaspberryVanillaAOSP16-*.img \
+  root@<server-ip>:/root/lobo-aosp/raspi5-aosp/out/target/product/rpi5/RaspberryVanillaAOSP16-*.img \
   ~/Downloads/
 ```
 
