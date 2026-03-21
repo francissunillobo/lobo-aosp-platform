@@ -1,21 +1,27 @@
 # lobo-aosp-platform
 
-Lobo AOSP Platform — custom vendor overlay for Android 15 (rpi5_custom).
+Lobo AOSP Platform — custom vendor overlay for Android 16 (rpi5_custom).
 
 ## Structure
 - `vendor/lobo/` — common libs, services, apps
-- `device/brcm/rpi5_custom/` — product config (inherits device/brcm/rpi5/) + HAL
+- `projects/rpi5_custom/` — product config (inherits device/brcm/rpi5/) + HAL
 
-## Repo integration
-Add to `manifest/manifest_brcm_rpi.xml` in raspberry-vanilla_android-15.0.0_r14:
-```xml
-<project name="francissunillobo/lobo-aosp-platform"
-         path="."
-         remote="github"
-         revision="main" />
+## Integration
+
+This repo lives outside the AOSP tree. It is connected via **bind mounts**:
+
+```bash
+sudo mount --bind /root/lobo-aosp/lobo-aosp-platform/vendor/lobo \
+                  /root/lobo-aosp/raspi5-aosp/vendor/lobo
+
+sudo mount --bind /root/lobo-aosp/lobo-aosp-platform/projects/rpi5_custom \
+                  /root/lobo-aosp/raspi5-aosp/vendor/projects/rpi5_custom
 ```
+
+See `docs/PROJECT_GUIDE.md` for full setup instructions.
 
 ## Build
 ```
-lunch rpi5_custom-userdebug && m
+lunch rpi5_custom-trunk_staging-userdebug
+make bootimage systemimage vendorimage -j$(nproc)
 ```

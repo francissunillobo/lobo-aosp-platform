@@ -26,8 +26,8 @@ AOSP source trees managed by `repo`.
 ### Key design principle
 
 `lobo-aosp-platform` lives **outside** all AOSP trees. The AOSP trees
-contain **symlinks** pointing into it. Git never tracks the symlinks —
-they are infrastructure created by the setup script on each server.
+contain **bind-mounted directories** pointing into it. Git never tracks
+these mount points — they are infrastructure set up on each server.
 
 ```
 lobo-aosp-platform/          ← one repo, shared across all hardware targets
@@ -37,114 +37,109 @@ lobo-aosp-platform/          ← one repo, shared across all hardware targets
     └── vim3_custom/         ← VIM3-specific board config & HAL (future)
 ```
 
-### Per-AOSP-tree symlinks
+### Per-AOSP-tree bind mounts
 
 When building for **RPi5**:
 ```
 raspi5-aosp/vendor/
-├── lobo/              → /root/lobo-aosp/lobo-aosp-platform/vendor/lobo
+├── lobo/              ← bind mount → lobo-aosp-platform/vendor/lobo/
 └── projects/
-    └── rpi5_custom/   → /root/lobo-aosp/lobo-aosp-platform/projects/rpi5_custom
+    └── rpi5_custom/   ← bind mount → lobo-aosp-platform/projects/rpi5_custom/
 ```
 
 When building for **VIM3** (future):
 ```
 vim3-aosp/vendor/
-├── lobo/              → /root/lobo-aosp/lobo-aosp-platform/vendor/lobo  (same)
+├── lobo/              ← bind mount → lobo-aosp-platform/vendor/lobo/  (same)
 └── projects/
-    └── vim3_custom/   → /root/lobo-aosp/lobo-aosp-platform/projects/vim3_custom
+    └── vim3_custom/   ← bind mount → lobo-aosp-platform/projects/vim3_custom/
 ```
 
 ### Why this matters
 
-- `raspi5-aosp` never sees `vim3_custom/` — AOSP only scans what is symlinked
+- `raspi5-aosp` never sees `vim3_custom/` — AOSP only scans what is bind-mounted
 - `vim3-aosp` never sees `rpi5_custom/`
 - Common code in `vendor/lobo/` is shared — one change applies to all targets
 - `lobo-aosp-platform` is never inside `vendor/` of any AOSP tree, so AOSP's
-  board scanner (`find -L vendor -maxdepth 4`) never finds duplicate BoardConfig.mk files
+  board scanner (`find -L vendor -maxdepth 4`) never finds duplicate `BoardConfig.mk`
 
 ---
 
-## 3. Why ALLOW_BP_UNDER_SYMLINKS=true
+## 3. Why bind mounts (not symlinks)
 
-AOSP's file scanner (Soong, `build/soong/ui/build/finder.go`) does **not**
-follow symlinks by default when discovering `AndroidProducts.mk`, `Android.bp`,
-and `Android.mk` files. Since `vendor/lobo` and `vendor/projects/rpi5_custom`
-are symlinks, the scanner would miss them without this flag.
+Symlinks were tried first and caused two critical failures:
 
-**Set in:** `vendor/lobo/vendorsetup.sh` (sourced automatically during
-`source build/envsetup.sh`).
+**Problem 1 — Soong scanner hung (50+ GB RAM)**
+`ALLOW_BP_UNDER_SYMLINKS=true` caused Soong to follow ALL symlinks in the
+tree including `.repo/` git-internal symlinks, scanning gigabytes of git
+objects indefinitely.
 
-```bash
-export ALLOW_BP_UNDER_SYMLINKS=true
-```
+**Problem 2 — Duplicate BoardConfig.mk**
+AOSP's `find -L vendor -maxdepth 4` found `BoardConfig.mk` at two paths
+simultaneously and crashed with a duplicate product error.
 
----
-
-## 4. Manifest — What Changed and Why
-
-The `manifest_brcm_rpi.xml` in the raspberry-vanilla fork previously
-contained this entry:
-
-```xml
-<!-- OLD — caused duplicate BoardConfig.mk errors -->
-<project name="francissunillobo/lobo-aosp-platform"
-         path="vendor/lobo_platform" remote="github" revision="main">
-  <linkfile src="vendor/lobo" dest="vendor/lobo" />
-  <linkfile src="projects/rpi5_custom" dest="vendor/projects/rpi5_custom" />
-</project>
-```
-
-**Problem:** Placing the repo at `vendor/lobo_platform` put all its contents
-inside `vendor/`. AOSP's `find -L vendor -maxdepth 4` found `BoardConfig.mk`
-at two separate paths:
-- `vendor/lobo_platform/projects/rpi5_custom/BoardConfig.mk` (direct)
-- `vendor/projects/rpi5_custom/BoardConfig.mk` (via linkfile symlink)
-
-**Fix:** The entry was removed from the manifest entirely.
-`lobo-aosp-platform` is now a standalone git clone managed independently,
-not via `repo sync`. Symlinks are created by `setup-platform-links.sh`.
-
-Current local manifest at
-`raspi5-aosp/.repo/local_manifests/manifest_brcm_rpi.xml` no longer
-contains the `lobo-aosp-platform` project entry.
-
-> **TODO:** Push this manifest change to the raspberry-vanilla fork on GitHub
-> so future `repo sync` runs do not re-add `vendor/lobo_platform`.
+**Why bind mounts solve both:**
+Soong sees real directories — no special flags needed.
+`find` sees real directories — no duplication.
+Deleting `raspi5-aosp/` only removes empty mount point directories —
+files in `lobo-aosp-platform/` are never affected.
 
 ---
 
-## 5. Setting Up a New Server from Scratch
+## 4. Setting Up a New Server from Scratch
 
-### Step 1 — Server setup
-```bash
-bash /path/to/setup-hetzner-server.sh
-```
-
-### Step 2 — Clone lobo-aosp-platform
+### Step 1 — Clone lobo-aosp-platform
 ```bash
 cd /root/lobo-aosp
 git clone https://github.com/francissunillobo/lobo-aosp-platform.git
 ```
 
-### Step 3 — Clone the private scripts repo
+### Step 2 — Clone the private scripts repo
 ```bash
 git clone git@github.com:francissunillobo/lobo-aosp-scripts.git /root/lobo-aosp/scripts
 ```
 
-### Step 4 — Initialise and sync AOSP tree (RPi5)
+### Step 3 — Set build mode
+```bash
+~/scripts/build-mode.sh
+```
+
+### Step 4 — Initialise and sync AOSP tree (RPi5, Android 16)
 ```bash
 mkdir -p /root/lobo-aosp/raspi5-aosp
 cd /root/lobo-aosp/raspi5-aosp
-repo init -u https://github.com/francissunillobo/raspberry-vanilla_android-15.0.0_r14 \
-     -m manifest/manifest_brcm_rpi.xml -b main
-# copy local manifests (manifest_utilities.xml, remove_projects.xml) as needed
-repo sync -c -j16 --no-tags --no-clone-bundle 2>&1 | tee ~/sync.log
+
+repo init -u https://android.googlesource.com/platform/manifest \
+          -b android-16.0.0_r3 --depth=1
+
+curl -o .repo/local_manifests/manifest_brcm_rpi.xml -L \
+  https://raw.githubusercontent.com/raspberry-vanilla/android_local_manifest/android-16.0.0_r3/manifest_brcm_rpi.xml \
+  --create-dirs
+
+curl -o .repo/local_manifests/remove_projects.xml -L \
+  https://raw.githubusercontent.com/raspberry-vanilla/android_local_manifest/android-16.0.0_r3/remove_projects.xml
+
+repo sync -c -j16 --no-tags --no-clone-bundle 2>&1 | tee ~/sync-android16.log
 ```
 
-### Step 5 — Create platform symlinks
+### Step 5 — Create bind mounts
 ```bash
-bash /root/lobo-aosp/scripts/setup-platform-links.sh raspi5-aosp rpi5_custom
+mkdir -p /root/lobo-aosp/raspi5-aosp/vendor/lobo
+mkdir -p /root/lobo-aosp/raspi5-aosp/vendor/projects/rpi5_custom
+
+sudo mount --bind \
+    /root/lobo-aosp/lobo-aosp-platform/vendor/lobo \
+    /root/lobo-aosp/raspi5-aosp/vendor/lobo
+
+sudo mount --bind \
+    /root/lobo-aosp/lobo-aosp-platform/projects/rpi5_custom \
+    /root/lobo-aosp/raspi5-aosp/vendor/projects/rpi5_custom
+```
+
+Add to `/etc/fstab` to persist across reboots:
+```
+/root/lobo-aosp/lobo-aosp-platform/vendor/lobo  /root/lobo-aosp/raspi5-aosp/vendor/lobo  none  bind  0  0
+/root/lobo-aosp/lobo-aosp-platform/projects/rpi5_custom  /root/lobo-aosp/raspi5-aosp/vendor/projects/rpi5_custom  none  bind  0  0
 ```
 
 ### Step 6 — Build
@@ -152,12 +147,17 @@ bash /root/lobo-aosp/scripts/setup-platform-links.sh raspi5-aosp rpi5_custom
 cd /root/lobo-aosp/raspi5-aosp
 source build/envsetup.sh
 lunch rpi5_custom-trunk_staging-userdebug
-make -j12 2>&1 | tee ~/build.log
+make bootimage systemimage vendorimage -j$(nproc) 2>&1 | tee ~/build-android16.log
+```
+
+### Step 7 — Create flashable image
+```bash
+./rpi5-mkimg.sh
 ```
 
 ---
 
-## 6. Day-to-Day Build Commands
+## 5. Day-to-Day Build Commands
 
 ```bash
 # Attach to tmux
@@ -168,29 +168,29 @@ cd /root/lobo-aosp/raspi5-aosp
 source build/envsetup.sh
 lunch rpi5_custom-trunk_staging-userdebug
 
-# Full build
-make -j12 2>&1 | tee ~/build.log
+# Build the 3 images needed for RPi5
+make bootimage systemimage vendorimage -j$(nproc) 2>&1 | tee ~/build-android16.log
 
-# Build specific modules
-make -j12 FanControlService NameService MySystemApp MyUserApp FanSettingsService
+# Build specific modules only
+make FanControlService NameService MySystemApp MyUserApp FanSettingsService -j$(nproc)
 
 # Check errors
-grep -E "error:|FAILED" ~/build.log | head -50
+grep -E "error:|FAILED" ~/build-android16.log | head -50
 ```
 
 ---
 
-## 7. Repository Index
+## 6. Repository Index
 
 | Repository | Visibility | Location | Purpose |
 |---|---|---|---|
 | lobo-aosp-platform | Public | github.com/francissunillobo/lobo-aosp-platform | Common platform code, project configs |
 | lobo-aosp-scripts | **Private** | github.com/francissunillobo/lobo-aosp-scripts | Server setup & automation scripts |
-| raspberry-vanilla fork | Public | github.com/francissunillobo/raspberry-vanilla_android-15.0.0_r14 | AOSP manifest for RPi5 |
+| raspberry-vanilla manifest | Public | github.com/raspberry-vanilla/android_local_manifest | RPi5 AOSP manifest (android-16.0.0_r3) |
 
 ---
 
-## 8. Server Info
+## 7. Server Info
 
 | | |
 |---|---|
@@ -201,4 +201,4 @@ grep -E "error:|FAILED" ~/build.log | head -50
 | RAM | 64 GB ECC |
 | Storage | 2× 2 TB HDD (RAID 1) |
 | OS | Ubuntu 22.04 LTS |
-| Build jobs | `make -j12` |
+| Build jobs | `make -j$(nproc)` |
