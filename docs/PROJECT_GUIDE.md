@@ -326,7 +326,7 @@ lunch rpi5_custom-trunk_staging-userdebug
 ```
 
 **What this means:**
-`rpi5_custom` gets everything from `aosp_rpi5_car` (kernel, GPU drivers, WiFi,
+`rpi5_custom` gets everything from `aosp_rpi5.mk` (kernel, GPU drivers, WiFi,
 Audio, full Android framework) and adds your Lobo services and apps on top.
 You never modify `device/brcm/rpi5/` — that is raspberry-vanilla's code.
 
