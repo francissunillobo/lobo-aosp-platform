@@ -1,0 +1,112 @@
+// Copyright (C) 2024 Lobo Platform
+// SPDX-License-Identifier: Apache-2.0
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AIDL interface
+//
+// Generates NDK and Java Binder stubs from ICalculatorService.aidl.
+// NDK backend used by the C++ service and client.
+// Java backend used by Kotlin/Java callers.
+// ─────────────────────────────────────────────────────────────────────────────
+aidl_interface {
+    name: "lobo_calculator_aidl",
+    vendor_available: true,
+    unstable: true,
+    srcs: ["aidl/com/lobo/platform/calculator/ICalculatorService.aidl"],
+    local_include_dir: "aidl",
+    backend: {
+        cpp: { enabled: false },
+        ndk: { enabled: true },
+        java: {
+            enabled: true,
+            platform_apis: true,
+        },
+        rust: { enabled: false },
+    },
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Calculator service daemon
+//
+// Installed to: /vendor/bin/calculatord
+// ─────────────────────────────────────────────────────────────────────────────
+cc_binary {
+    name: "calculatord",
+    vendor: true,
+    srcs: [
+        "cpp/core/src/CalculatorServiceImpl.cpp",
+        "cpp/core/src/main.cpp",
+    ],
+    local_include_dirs: [
+        "cpp/core/include",
+    ],
+    shared_libs: [
+        "libbinder_ndk",
+        "liblog",
+    ],
+    static_libs: [
+        "lobo_calculator_aidl-ndk",
+    ],
+    cflags: ["-Wall", "-Wextra", "-Werror"],
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// C++ client library
+//
+// Used by other C++ services that want to call the calculator.
+// ─────────────────────────────────────────────────────────────────────────────
+cc_library_static {
+    name: "liblobo_calculator_client",
+    vendor: true,
+    srcs: ["cpp/client/src/CalculatorClient.cpp"],
+    local_include_dirs: [
+        "cpp/client/include",
+    ],
+    export_include_dirs: [
+        "cpp/client/include",
+    ],
+    shared_libs: [
+        "libbinder_ndk",
+        "liblog",
+    ],
+    static_libs: [
+        "lobo_calculator_aidl-ndk",
+    ],
+    cflags: ["-Wall", "-Wextra", "-Werror"],
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Kotlin/Java client library
+//
+// Used by Android apps and Java services.
+// ─────────────────────────────────────────────────────────────────────────────
+java_library {
+    name: "CalculatorJavaClient",
+    vendor: true,
+    srcs: ["java/src/main/java/**/*.kt"],
+    sdk_version: "current",
+    static_libs: [
+        "lobo_calculator_aidl-java",
+    ],
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VTS test binary
+//
+// Build:  m VtsCalculatorServiceTest
+// Run:    atest VtsCalculatorServiceTest
+// ─────────────────────────────────────────────────────────────────────────────
+cc_test {
+    name: "VtsCalculatorServiceTest",
+    vendor: true,
+    srcs: ["tests/src/VtsCalculatorServiceTest.cpp"],
+    shared_libs: [
+        "libbinder_ndk",
+        "liblog",
+    ],
+    static_libs: [
+        "lobo_calculator_aidl-ndk",
+    ],
+    test_suites: ["vts"],
+    cflags: ["-Wall", "-Wextra", "-Werror"],
+}

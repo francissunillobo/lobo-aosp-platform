@@ -7,10 +7,12 @@ PRODUCT_PACKAGES += \
     FanControlService \
     FanSettingsService \
     NameService \
+    calculatord \
     MySystemApp \
     MyUserApp
 
 # Install init rc files via PRODUCT_COPY_FILES to avoid Soong/Make bridge conflict
 PRODUCT_COPY_FILES += \
     vendor/lobo/services/fancontrol/fancontrol.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/fancontrol.rc \
-    vendor/lobo/services/name_service/name_service.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/name_service.rc
+    vendor/lobo/services/name_service/name_service.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/name_service.rc \
+    vendor/lobo/services/calculator/calculator.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/calculator.rc

@@ -1,0 +1,6 @@
+# Copyright (C) 2024 Lobo Platform
+# SPDX-License-Identifier: Apache-2.0
+
+# Maps the Binder service name to its SELinux label.
+# Must exactly match the string passed to AServiceManager_addService() in main.cpp.
+com.lobo.platform.calculator.ICalculatorService    u:object_r:calculatord_service:s0
