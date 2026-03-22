@@ -2,11 +2,34 @@
 # setup-bind-mounts.sh
 # Sets up bind mounts to connect lobo-aosp-platform into an AOSP tree.
 #
+# What:
+#   Creates an empty mount point directory in the AOSP tree and bind-mounts
+#   the corresponding project folder from lobo-aosp-platform into it.
+#   Also bind-mounts vendor/lobo/ (common code, shared across all projects).
+#
+# Why:
+#   lobo-aosp-platform lives outside all AOSP trees. Bind mounts make it
+#   visible to the AOSP build system as a real directory (not a symlink),
+#   avoiding Soong scanner issues and duplicate BoardConfig.mk errors.
+#   Deleting an AOSP tree only removes the empty mount point — the actual
+#   source files in lobo-aosp-platform are never affected.
+#
+# How:
+#   Run once per project per AOSP tree. Safe to run multiple times —
+#   skips already-mounted targets. Add fstab entries to persist across reboots.
+#
 # Usage:
 #   ./scripts/setup-bind-mounts.sh <aosp-tree> <project>
 #
-# Examples:
+# Current projects in lobo-aosp-platform:
+#   rpi5_custom     — standard Android (inherits aosp_rpi5.mk)
+#   rpi5_custom_car — Android Automotive (inherits aosp_rpi5_car.mk)
+#
+# Examples — run both for a full raspi5-aosp setup:
 #   ./scripts/setup-bind-mounts.sh raspi5-aosp rpi5_custom
+#   ./scripts/setup-bind-mounts.sh raspi5-aosp rpi5_custom_car
+#
+# Future VIM3 example:
 #   ./scripts/setup-bind-mounts.sh vim3-aosp vim3_custom
 
 set -e
