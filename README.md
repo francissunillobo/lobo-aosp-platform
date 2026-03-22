@@ -2,6 +2,12 @@
 
 Lobo AOSP Platform — custom vendor overlay for Android 16 (rpi5_custom).
 
+## Documentation
+
+- **`docs/PROJECT_GUIDE.md`** — full project guide (what the platform is, server layout, build, flash).
+- **`docs/SETUP.md`** — Hetzner server setup, `repo`, bind mounts, day-to-day commands.
+- **`docs/DOCUMENTATION_STYLE.md`** — **What / Why / How** — use this when writing or updating any doc in this repo.
+
 ## Structure
 - `vendor/lobo/` — common libs, services, apps
 - `projects/rpi5_custom/` — product config (inherits device/brcm/rpi5/) + HAL

@@ -3,6 +3,10 @@
 This document describes the complete setup of the Lobo AOSP build environment
 on the Hetzner dedicated server.
 
+**What:** Server layout, `repo` sync, bind mounts, build and flash commands.  
+**Why:** Keep platform code outside AOSP trees, avoid symlink/Soong issues, share `vendor/lobo/` across targets.  
+**How:** Numbered steps and copy-paste commands below. Doc style: `DOCUMENTATION_STYLE.md`.
+
 ---
 
 ## 1. Overview

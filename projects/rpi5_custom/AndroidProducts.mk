@@ -1,5 +1,7 @@
-# Lunch targets for rpi5_custom (included from vendor/lobo/Android.mk)
-# Use += so multiple boards can append from their own projects/*/AndroidProducts.mk
+# Included from vendor/lobo/Android.mk — LOCAL_DIR is set there to this directory.
+# PRODUCT_MAKEFILES + COMMON_LUNCH_CHOICES must stay in the same file (AOSP lunch check).
+
+PRODUCT_MAKEFILES += $(LOCAL_DIR)/rpi5_custom.mk
 
 COMMON_LUNCH_CHOICES += \
     rpi5_custom-trunk_staging-userdebug \

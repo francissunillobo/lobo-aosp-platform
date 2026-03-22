@@ -355,16 +355,26 @@ Currently minimal — bind mounts make special flags unnecessary.
 
 ### `Android.mk`
 **Location:** `vendor/lobo/Android.mk`
-**Purpose:** Target-agnostic hook: auto-registers every board under `projects/`
-that follows the naming rule `projects/<name>/<name>.mk`, and includes each
-`projects/*/AndroidProducts.mk` for lunch combos. You do **not** list RPi5 vs VIM3
-here — add a new directory under `projects/` instead.
+**Purpose:** Documents the Lobo vendor tree only. It does **not** include
+`AndroidProducts.mk` — Soong lists those under
+`out/.module_paths/AndroidProducts.mk.list`, and **`build/make/core/product_config.mk`**
+(`_read-ap-file`) sets **`LOCAL_DIR`**, includes each file **once**, and validates.
+Including the same files from here would duplicate work and can break `lunch`.
 
 ### `AndroidProducts.mk`
 **Location:** `projects/rpi5_custom/AndroidProducts.mk` (one per board)
-**Purpose:** Appends `COMMON_LUNCH_CHOICES` for that board only. Product makefiles
-are registered by `vendor/lobo/Android.mk`, not in this file.
+**Purpose:** Must define **`PRODUCT_MAKEFILES`** (which `<name>.mk` is this product)
+and **`COMMON_LUNCH_CHOICES`** (`lunch` combos) **in the same file**. AOSP’s
+`envsetup` validates that every lunch choice references a product makefile declared
+in that file — listing only `COMMON_LUNCH_CHOICES` (with `PRODUCT_MAKEFILES`
+elsewhere) fails with *“products not defined in this file”*.
+
+**Note:** `LOCAL_DIR` is set by **`product_config.mk`** (`_read-ap-file`) before
+each `include` — use `$(LOCAL_DIR)/<name>.mk` in `PRODUCT_MAKEFILES`. Do not rely
+on `$(call my-dir)` here (wrong context when the build includes this file).
+
 ```makefile
+PRODUCT_MAKEFILES += $(LOCAL_DIR)/rpi5_custom.mk
 COMMON_LUNCH_CHOICES += \
     rpi5_custom-trunk_staging-userdebug \
     rpi5_custom-trunk_staging-user \
