@@ -5,6 +5,8 @@
 **Target hardware:** Raspberry Pi 5
 **Android version:** Android 16 (android-16.0.0_r3)
 
+**What / Why / How:** This guide explains *what* the platform contains, *why* bind mounts and `projects/` exist, and *how* to build and extend it. For the doc-writing convention used here, see `DOCUMENTATION_STYLE.md`.
+
 ---
 
 ## Table of Contents
@@ -316,18 +318,29 @@ product configuration in this chain:
 ```
 lunch rpi5_custom-trunk_staging-userdebug
     │
-    └── projects/rpi5_custom/rpi5_custom.mk          ← YOUR product definition
+    └── vendor/projects/rpi5_custom/rpi5_custom.mk       ← YOUR product definition
             │
-            └── device/brcm/rpi5/aosp_rpi5.mk        ← raspberry-vanilla RPi5 product
-                    │
-                    └── device/brcm/rpi5/device.mk   ← RPi5 packages and overlays
-                            │
-                            └── AOSP base (full_base.mk, etc.)
+            ├── device/brcm/rpi5/aosp_rpi5.mk            ← raspberry-vanilla RPi5 product
+            │       │
+            │       └── device/brcm/rpi5/device.mk       ← RPi5 packages and overlays
+            │               │
+            │               └── AOSP base (full_base.mk, etc.)
+            │
+            └── vendor/projects/rpi5_custom/device.mk    ← YOUR packages + PRODUCT_COPY_FILES
 ```
 
 **What this means:**
-`rpi5_custom` gets everything from `aosp_rpi5.mk` (kernel, GPU drivers, WiFi,
-Audio, full Android framework) and adds your Lobo services and apps on top.
+`rpi5_custom.mk` inherits two things:
+1. `aosp_rpi5.mk` — gets kernel, GPU drivers, WiFi, audio, full Android framework from raspberry-vanilla
+2. `device.mk` — adds your Lobo `PRODUCT_PACKAGES` and `PRODUCT_COPY_FILES` (init `.rc` files)
+
+`$(call inherit-product, ...)` always uses paths relative to the AOSP tree root (`$TOP`).
+After the bind mount, `lobo-aosp-platform/projects/rpi5_custom/` is visible as
+`vendor/projects/rpi5_custom/` from `$TOP`, so the path is exactly:
+```makefile
+$(call inherit-product, vendor/projects/rpi5_custom/device.mk)
+```
+
 You never modify `device/brcm/rpi5/` — that is raspberry-vanilla's code.
 
 ---
@@ -342,31 +355,40 @@ Currently minimal — bind mounts make special flags unnecessary.
 
 ### `Android.mk`
 **Location:** `vendor/lobo/Android.mk`
-**Purpose:** Registers the `rpi5_custom` product makefile with AOSP.
-```makefile
-PRODUCT_MAKEFILES += $(LOCAL_PATH)/../../projects/rpi5_custom/rpi5_custom.mk
-```
-Without this, AOSP would never find your product definition.
+**Purpose:** Target-agnostic hook: auto-registers every board under `projects/`
+that follows the naming rule `projects/<name>/<name>.mk`, and includes each
+`projects/*/AndroidProducts.mk` for lunch combos. You do **not** list RPi5 vs VIM3
+here — add a new directory under `projects/` instead.
 
 ### `AndroidProducts.mk`
-**Location:** `projects/rpi5_custom/AndroidProducts.mk`
-**Purpose:** Declares which lunch targets are available for this product.
+**Location:** `projects/rpi5_custom/AndroidProducts.mk` (one per board)
+**Purpose:** Appends `COMMON_LUNCH_CHOICES` for that board only. Product makefiles
+are registered by `vendor/lobo/Android.mk`, not in this file.
 ```makefile
-COMMON_LUNCH_CHOICES += rpi5_custom-trunk_staging-userdebug
-COMMON_LUNCH_CHOICES += rpi5_custom-trunk_staging-user
-COMMON_LUNCH_CHOICES += rpi5_custom-trunk_staging-eng
+COMMON_LUNCH_CHOICES += \
+    rpi5_custom-trunk_staging-userdebug \
+    rpi5_custom-trunk_staging-user \
+    rpi5_custom-trunk_staging-eng
 ```
 
 ### `rpi5_custom.mk`
 **Location:** `projects/rpi5_custom/rpi5_custom.mk`
-**Purpose:** Main product definition. Inherits raspberry-vanilla RPi5 product,
-sets product identity, lists Lobo packages to include.
+**Purpose:** Main product definition. Inherits two products in order:
+1. `device/brcm/rpi5/aosp_rpi5.mk` — full raspberry-vanilla RPi5 base
+2. `vendor/projects/rpi5_custom/device.mk` — Lobo packages and `.rc` files
+
+Sets `PRODUCT_NAME`, `PRODUCT_BRAND`, `PRODUCT_MODEL`, `PRODUCT_MANUFACTURER` here only.
+**Does NOT contain `PRODUCT_PACKAGES`** — that belongs exclusively in `device.mk`.
 
 ### `device.mk`
 **Location:** `projects/rpi5_custom/device.mk`
-**Purpose:** Package list and file installation. Inherits `device/brcm/rpi5/device.mk`
-and adds Lobo packages. Also copies `.rc` init files via `PRODUCT_COPY_FILES`
-(required because Soong/Make bridge has conflicts with `init_rc` in Android.bp).
+**Purpose:** **Single place** for Lobo `PRODUCT_PACKAGES` and `PRODUCT_COPY_FILES`
+(init `.rc` files). It does **not** re-inherit `device/brcm/rpi5/device.mk` (that
+already comes from `aosp_rpi5.mk`). **Why:** avoids duplicating the same package
+list in two files and ensures `PRODUCT_COPY_FILES` is actually applied (`device.mk`
+must be pulled in via `$(call inherit-product, vendor/projects/rpi5_custom/device.mk)`
+from `rpi5_custom.mk`). **How:** add packages or copy rules here; keep `PRODUCT_NAME`
+in `rpi5_custom.mk` only.
 
 ### `BoardConfig.mk`
 **Location:** `projects/rpi5_custom/BoardConfig.mk`
@@ -558,7 +580,11 @@ separately — the `.img` file handles everything.
 
 The architecture is designed for this. Steps:
 
-1. Create `projects/vim3_custom/` in `lobo-aosp-platform` (similar to `rpi5_custom/`)
+1. Create `projects/vim3_custom/` in `lobo-aosp-platform` (similar to `rpi5_custom/`):
+   include `vim3_custom.mk`, `AndroidProducts.mk`, `BoardConfig.mk`, `device.mk`,
+   and VIM3-specific HAL under `hal/`. Follow the naming rule
+   `projects/vim3_custom/vim3_custom.mk` — `vendor/lobo/Android.mk` picks it up
+   automatically; you do **not** edit `vendor/lobo/` to add a new board.
 2. Sync a new AOSP tree: `/root/lobo-aosp/vim3-aosp/`
 3. Create bind mounts:
 ```bash
