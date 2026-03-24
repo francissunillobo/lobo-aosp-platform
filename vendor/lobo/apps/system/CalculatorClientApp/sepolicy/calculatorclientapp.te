@@ -1,0 +1,14 @@
+# Copyright (C) 2024 Lobo Platform
+# SPDX-License-Identifier: Apache-2.0
+
+# Custom domain for CalculatorClientApp.
+# app_domain() grants standard app permissions.
+type calculatorclientapp, domain;
+app_domain(calculatorclientapp)
+
+# Allow Binder IPC
+binder_use(calculatorclientapp)
+
+# Allow calling calculatord via Binder
+binder_call(calculatorclientapp, calculatord)
+allow calculatorclientapp calculatord_service:service_manager find;

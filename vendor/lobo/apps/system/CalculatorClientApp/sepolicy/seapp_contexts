@@ -1,0 +1,3 @@
+# Assign com.lobo.platform.calculator.client to the calculatorclientapp domain.
+# seinfo=platform matches apps signed with the platform certificate.
+user=_app seinfo=platform name=com.lobo.platform.calculator.client domain=calculatorclientapp type=app_data_file levelFrom=user

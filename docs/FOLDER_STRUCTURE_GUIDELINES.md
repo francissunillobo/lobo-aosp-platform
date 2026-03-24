@@ -415,7 +415,8 @@ apps/system/<AppName>/
 │   └── values/
 │       └── strings.xml
 ├── sepolicy/
-│   └── <appname>.te                        ← include only if custom SELinux needed
+│   ├── <appname>.te                        ← custom domain + permissions
+│   └── seapp_contexts                      ← maps package name to the domain
 └── src/
     └── main/
         └── java/
@@ -441,6 +442,39 @@ calls to protected system APIs fail silently at runtime with a security exceptio
 **`certificate: "platform"`:**
 Platform certificate is required for apps that use `android:sharedUserId="android.uid.system"`
 or access APIs restricted to platform-signed apps.
+
+**`sepolicy/` — required for all Lobo vendor system apps:**
+Vendor privileged apps that call custom Binder services, access vendor resources, or
+use vendor HALs need an explicit SELinux domain. Without it the app relies on the
+generic `platform_app` domain which may be denied at runtime with no clear log trail.
+Start minimal and extend only when `avc: denied` appears in logcat.
+
+Two files are required (different from native daemons — no `file_contexts` or `service_contexts`):
+
+| File | What | Why |
+|------|------|-----|
+| `<appname>.te` | Domain definition and permission rules | Defines what the app is allowed to do. `app_domain()` grants base app permissions. |
+| `seapp_contexts` | Maps the package name to the domain | Without this the app runs in the generic `platform_app` domain instead of the custom one. |
+
+**Important — wrong pattern to avoid:**
+Do NOT add `exec_type` or `vendor_file_type` to an app's `.te` file. Those are for
+native binaries launched by `init`. An Android app is spawned by Zygote, not exec'd
+from disk.
+
+```te
+# WRONG — exec_type is for native daemons, not apps
+type mysystemapp_exec, exec_type, vendor_file_type, file_type;   ← remove this
+
+# CORRECT minimal pattern for a vendor privileged app
+type mysystemapp, domain;
+app_domain(mysystemapp)
+binder_use(mysystemapp)
+```
+
+The `sepolicy/` path must also be registered in `BoardConfig.mk`:
+```makefile
+BOARD_VENDOR_SEPOLICY_DIRS += vendor/lobo/apps/system/<AppName>/sepolicy
+```
 
 **`di/` folder:**
 Dependency injection wiring (e.g. Hilt modules, manual DI). Kept separate from

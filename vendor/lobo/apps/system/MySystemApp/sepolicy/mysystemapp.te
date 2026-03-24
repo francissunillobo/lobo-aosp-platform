@@ -1,5 +1,11 @@
-type mysystemapp, domain;
-type mysystemapp_exec, exec_type, vendor_file_type, file_type;
+# Copyright (C) 2024 Lobo Platform
+# SPDX-License-Identifier: Apache-2.0
 
+# Custom domain for MySystemApp.
+# app_domain() grants standard app permissions (Binder, data dirs, logd, etc.)
+# Extend this file when avc: denied appears in logcat for this package.
+type mysystemapp, domain;
 app_domain(mysystemapp)
-allow mysystemapp binder_device:chr_file rw_file_perms;
+
+# Allow Binder IPC
+binder_use(mysystemapp)

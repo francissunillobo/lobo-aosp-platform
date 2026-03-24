@@ -1,0 +1,3 @@
+# Assign com.lobo.platform.systemapp to the mysystemapp domain.
+# seinfo=platform matches apps signed with the platform certificate.
+user=_app seinfo=platform name=com.lobo.platform.systemapp domain=mysystemapp type=app_data_file levelFrom=user
