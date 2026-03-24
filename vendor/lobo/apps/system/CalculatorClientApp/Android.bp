@@ -1,0 +1,15 @@
+android_app {
+    name: "CalculatorClientApp",
+    vendor: true,
+    privileged: true,
+    srcs: ["src/main/java/**/*.kt"],
+    resource_dirs: ["res"],
+    manifest: "AndroidManifest.xml",
+    sdk_version: "current",
+    min_sdk_version: "33",
+    certificate: "platform",
+    static_libs: [
+        "lobo-common-java",
+        "lobo_calculator_aidl-java",
+    ],
+}
