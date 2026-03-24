@@ -652,3 +652,27 @@ make ... 2>&1 | tee ~/build-android16.log
 ```
 `2>&1` merges error output into standard output so both go to the log file.
 Without it, errors appear on screen but are not saved.
+
+### AAOS launcher issue: user stuck in BOOTING (FallbackHome)
+**What:** CarLauncher may appear "broken" even when installed and selected as HOME,
+because the active user session (often user 10 / Driver) is still in `BOOTING`.
+In this state, `am start` and HOME resolution can behave inconsistently and
+`FallbackHome` may stay on top.
+
+**Why:** Automotive user lifecycle is per-user and asynchronous. `am start-user`
+returning `Success` only means start was requested; it does **not** guarantee
+the user reached `RUNNING_UNLOCKED`. Commands run without `--user` target the
+current foreground user, which can hide the real issue.
+
+**How:**
+1. Validate user/home state after boot:
+   ```bash
+   cd /root/lobo-aosp/lobo-aosp-platform
+   ./scripts/validate-car-home.sh 10
+   ```
+2. If the script reports `BOOTING`, wait/unlock the profile on device UI.
+3. Re-check; if still `BOOTING` for 1-2 minutes, reboot and run validator again.
+4. During manual tests, always pass explicit user:
+   ```bash
+   adb shell am start --user 10 -a android.intent.action.MAIN -c android.intent.category.HOME
+   ```

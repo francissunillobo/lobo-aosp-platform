@@ -17,10 +17,9 @@ aidl_interface {
     backend: {
         cpp: { enabled: false },
         ndk: { enabled: true },
-        java: {
-            enabled: true,
-            platform_apis: true,
-        },
+        // Java backend disabled: CalculatorJavaClient not yet buildable as a
+        // vendor module (see comment below). Re-enable when moving to system_ext.
+        java: { enabled: false },
         rust: { enabled: false },
     },
 }
@@ -76,19 +75,24 @@ cc_library_static {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Kotlin/Java client library
+// Kotlin/Java client library — NOT BUILT YET
 //
-// Used by Android apps and Java services.
+// Android 16 sets PRODUCT_ENFORCE_PRODUCT_PARTITION_INTERFACE which blocks
+// platform_apis: true on vendor Java modules. At the same time, the Kotlin
+// source uses android.os.ServiceManager (@hide) which requires platform_apis.
+// These two rules cannot both be satisfied for a vendor java_library.
+//
+// Resolution: Java/Kotlin app callers must be placed on the system partition
+// (system_ext or priv-app), not in vendor. Revisit when building the first
+// Android app that needs to call calculatord from Java/Kotlin.
+//
+// The source files in java/ are kept as reference and will be moved to the
+// correct partition module when needed.
 // ─────────────────────────────────────────────────────────────────────────────
-java_library {
-    name: "CalculatorJavaClient",
-    vendor: true,
-    srcs: ["java/src/main/java/**/*.kt"],
-    sdk_version: "current",
-    static_libs: [
-        "lobo_calculator_aidl-java",
-    ],
-}
+// java_library {
+//     name: "CalculatorJavaClient",
+//     ...
+// }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VTS test binary

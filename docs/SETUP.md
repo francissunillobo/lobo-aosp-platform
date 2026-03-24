@@ -182,6 +182,21 @@ make FanControlService NameService MySystemApp MyUserApp FanSettingsService -j$(
 grep -E "error:|FAILED" ~/build-android16.log | head -50
 ```
 
+### Post-boot AAOS validation (What / Why / How)
+
+**What:** Validate that the target Automotive user is fully up and HOME resolves
+to CarLauncher instead of FallbackHome.
+
+**Why:** A common runtime issue is user 10 (Driver) stuck in `BOOTING`; launcher
+commands then fail or route to `FallbackHome` even though package/install state looks fine.
+
+**How:**
+```bash
+cd /root/lobo-aosp/lobo-aosp-platform
+./scripts/validate-car-home.sh 10
+```
+If it fails with `BOOTING`, unlock/wait; if it remains stuck, reboot and rerun.
+
 ---
 
 ## 6. Repository Index

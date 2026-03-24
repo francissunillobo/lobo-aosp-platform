@@ -31,3 +31,12 @@ See `docs/PROJECT_GUIDE.md` for full setup instructions.
 lunch rpi5_custom-trunk_staging-userdebug
 make bootimage systemimage vendorimage -j$(nproc)
 ```
+
+## Validation
+```bash
+# Validate post-boot AAOS HOME state (defaults to current user)
+./scripts/validate-car-home.sh
+
+# Validate a specific user (example: Driver user 10)
+./scripts/validate-car-home.sh 10
+```
