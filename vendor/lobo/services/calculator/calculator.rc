@@ -6,3 +6,7 @@ service calculatord /vendor/bin/calculatord
     user system
     group system
     # No 'oneshot' — init will restart automatically if the service crashes
+
+on init
+    # Ensure Binder service is available for CalculatorClientApp.
+    start calculatord

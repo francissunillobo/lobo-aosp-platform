@@ -6,6 +6,7 @@ Lobo AOSP Platform — custom vendor overlay for Android 16 (rpi5_custom).
 
 - **`docs/PROJECT_GUIDE.md`** — full project guide (what the platform is, server layout, build, flash).
 - **`docs/SETUP.md`** — Hetzner server setup, `repo`, bind mounts, day-to-day commands.
+- **`docs/CALCULATOR_SERVICE.md`** — calculator service + app architecture, AIDL lessons, and adb validation.
 - **`docs/DOCUMENTATION_STYLE.md`** — **What / Why / How** — use this when writing or updating any doc in this repo.
 
 ## Structure

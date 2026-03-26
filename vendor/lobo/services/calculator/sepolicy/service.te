@@ -2,6 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Binder service type for the calculator service entry in ServiceManager.
-# app_api_service  — allows apps (untrusted_app, priv_app, etc.) to find it
-# service_manager_type — mandatory attribute for all ServiceManager entries
-type calculatord_service, app_api_service, service_manager_type;
+#
+# Vendor stability enforcement is strict, but policy compilation rules also
+# require that vendor apps can only `find` "stable public services".
+#
+# `app_api_service` is one of the exemptions for the relevant neverallow.
+# We keep `app_api_service` so CalculatorClientApp can locate the service.
+type calculatord_service, app_api_service, system_api_service, service_manager_type;

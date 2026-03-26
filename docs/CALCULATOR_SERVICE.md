@@ -1,338 +1,380 @@
-# Calculator Service — `vendor/lobo/services/calculator/`
+# Calculator Platform Guide (Service + Client App)
 
-**What:** A vendor Binder service (`calculatord`) that exposes add, subtract, multiply,
-and divide operations over IPC. It is the reference example for how Lobo platform
-services are structured: AIDL interface → C++ daemon → C++ client library → Kotlin
-client library → VTS tests → SELinux policy.
+**What:** This document explains the complete calculator stack in `lobo-aosp-platform`: the vendor Binder service (`calculatord`), the AIDL contract, and the `CalculatorClientApp` UI app.
 
-**Why:** Demonstrates the full service lifecycle in one self-contained module so every
-new service can follow the same pattern without guessing.
+**Why:** The calculator modules are the reference pattern for future Lobo services/apps. This guide records the final architecture, integration choices, known AIDL pitfalls, and device verification commands.
 
-**How:** Read this document top-to-bottom; the sections follow the data/control flow
-from build definition → runtime startup → client call.
+**How:** Use this guide when developing, debugging, or onboarding. It includes folder maps, runtime flow, lessons learned, and ready-to-run `adb` checks.
 
----
-
-## Directory Layout
-
-```
-services/calculator/
-├── Android.bp                          ← build rules for all modules
-├── calculator.rc                       ← init script (starts the daemon at boot)
-├── aidl/
-│   └── com/lobo/platform/calculator/
-│       └── ICalculatorService.aidl     ← the contract (single source of truth)
-├── cpp/
-│   ├── core/
-│   │   ├── include/…/ICalculator.h              ← abstract C++ interface
-│   │   ├── include/…/CalculatorServiceImpl.h    ← Binder impl declaration
-│   │   └── src/
-│   │       ├── CalculatorServiceImpl.cpp        ← logic (add/sub/mul/div)
-│   │       └── main.cpp                         ← daemon entry point
-│   └── client/
-│       ├── include/…/CalculatorClient.h         ← C++ client API
-│       └── src/CalculatorClient.cpp             ← lazy Binder connection
-├── java/
-│   └── …/calculator/
-│       ├── api/ICalculatorClient.kt             ← Kotlin interface
-│       └── impl/CalculatorClientImpl.kt         ← Kotlin Binder client
-├── sepolicy/
-│   ├── calculator.te                   ← SELinux process domain
-│   ├── service.te                      ← SELinux service type
-│   ├── file_contexts                   ← label for /vendor/bin/calculatord
-│   └── service_contexts                ← label for the ServiceManager entry
-└── tests/
-    └── src/VtsCalculatorServiceTest.cpp ← VTS tests (concurrency, error codes)
-```
+For broader platform context, also refer to:
+- `docs/FOLDER_STRUCTURE_GUIDELINES.md`
+- `docs/PROJECT_GUIDE.md`
 
 ---
 
-## How the Files Link Together
+## 1) Project Folder Map
+
+### What
+The calculator feature is split into two main modules plus product wiring.
+
+### Why
+Keeping service and app separated mirrors production Android layering:
+vendor daemon in `vendor/lobo/services/...` and client UI in `vendor/lobo/apps/...`.
+
+### How
+Use this map as the source of truth for where each responsibility lives.
 
 ```
-ICalculatorService.aidl  (the contract)
-        │
-        │  AIDL compiler generates (at build time):
-        ├──► BnCalculatorService   (C++ server stub, NDK backend)
-        ├──► ICalculatorService    (C++ client proxy, NDK backend)
-        └──► ICalculatorService    (Java/Kotlin stub + proxy)
-
-BnCalculatorService
-        │  CalculatorServiceImpl inherits from it
-        ▼
-CalculatorServiceImpl.cpp  (implements add/subtract/multiply/divide)
-        │  instantiated in
-        ▼
-main.cpp  (daemon entry point)
-        │  registers via AServiceManager_addService()
-        ▼
-ServiceManager  (system service registry)
-        │
-        ├──► CalculatorClient.cpp  (C++ client — calls AServiceManager_checkService)
-        │
-        └──► CalculatorClientImpl.kt  (Kotlin client — calls ServiceManager.checkService)
+lobo-aosp-platform/
+├── vendor/lobo/services/calculator/
+│   ├── Android.bp
+│   ├── calculator.rc
+│   ├── aidl/com/lobo/platform/calculator/ICalculatorService.aidl
+│   ├── cpp/
+│   │   ├── core/
+│   │   │   ├── include/lobo/platform/calculator/
+│   │   │   │   ├── ICalculator.h
+│   │   │   │   └── CalculatorServiceImpl.h
+│   │   │   └── src/
+│   │   │       ├── CalculatorServiceImpl.cpp
+│   │   │       └── main.cpp
+│   │   ├── client/
+│   │   │   ├── include/lobo/platform/calculator/CalculatorClient.h
+│   │   │   └── src/CalculatorClient.cpp
+│   │   ├── java/src/main/java/com/lobo/platform/calculator/
+│   │   │   ├── api/   (currently empty)
+│   │   │   └── impl/  (currently empty)
+│   │   ├── sepolicy/
+│   │   │   ├── calculator.te
+│   │   │   ├── service.te
+│   │   │   ├── file_contexts
+│   │   │   └── service_contexts
+│   │   └── tests/src/VtsCalculatorServiceTest.cpp
+│   │
+│   └── apps/system/CalculatorClientApp/
+│       ├── Android.bp
+│       ├── AndroidManifest.xml
+│       ├── res/
+│       │   ├── layout/activity_calculator_client.xml
+│       │   ├── values/strings.xml
+│       │   └── drawable/calculator_edittext_bg.xml
+│       ├── sepolicy/
+│       │   ├── calculatorclientapp.te
+│       │   └── seapp_contexts
+│       └── src/main/java/com/lobo/platform/calculator/
+│           ├── api/ICalculatorClient.kt
+│           ├── impl/CalculatorClientImpl.kt
+│           ├── di/AppModule.kt
+│           └── client/ui/MainActivity.kt
+│
+└── projects/rpi5_custom_car/
+    ├── device.mk
+    └── init/hw/init.rpi5.rc
 ```
 
 ---
 
-## File-by-File Explanation
+## 2) Architecture and Runtime Flow
 
-### `ICalculatorService.aidl` — The Contract
+### What
+`calculatord` is an NDK Binder service registered as:
+`com.lobo.platform.calculator.ICalculatorService`.
+`CalculatorClientApp` is a vendor privileged app that binds to it and exposes UI buttons.
 
-**What:** Defines the IPC interface. Four methods: `add`, `subtract`, `multiply`,
-`divide`. One constant: `ERROR_DIVIDE_BY_ZERO = 1`.
+### Why
+This pattern demonstrates a full Android vendor service lifecycle:
+AIDL contract -> generated stubs -> daemon registration -> client calls -> SELinux enforcement.
 
-**Why:** AIDL is the single source of truth. The build system generates all C++ and
-Java/Kotlin stubs from this one file. No hand-written IPC code.
+### How
+Boot and call flow:
 
-**How:** Placed under `aidl/com/lobo/platform/calculator/` — the directory path must
-match the Java package name `com.lobo.platform.calculator`.
+```
+Boot
+ ├─ init imports /vendor/etc/init/calculator.rc
+ ├─ starts /vendor/bin/calculatord
+ └─ calculatord registers:
+      com.lobo.platform.calculator.ICalculatorService
+
+App call (Add/Subtract/Multiply/Divide)
+ ├─ MainActivity -> ICalculatorClient
+ ├─ CalculatorClientImpl gets binder from ServiceManager.checkService()
+ ├─ ICalculatorService.Stub.asInterface(...)
+ └─ Binder IPC -> CalculatorServiceImpl -> result back to app
+```
+
+---
+
+## 3) AIDL for Beginners (Stub, Proxy, Generated Code)
+
+### What
+AIDL (Android Interface Definition Language) is the contract language used by Binder IPC. In this project, the file is:
+`vendor/lobo/services/calculator/aidl/com/lobo/platform/calculator/ICalculatorService.aidl`
+
+### Why
+Beginners often see `Stub`, `Proxy`, `Bn...`, `Bp...`, and `asInterface(...)` and it feels magical. The key idea is:
+- you write one `.aidl` interface
+- Android generates server/client glue code
+- your service implements the server side
+- your app uses the client side
+
+### How
+
+#### 3.1 Create the AIDL contract
+Write method signatures only (no business logic) in `ICalculatorService.aidl`:
 
 ```aidl
 interface ICalculatorService {
     int add(int a, int b);
     int subtract(int a, int b);
     int multiply(int a, int b);
-    int divide(int a, int b);          // throws ServiceSpecificException on b==0
+    int divide(int a, int b);
     const int ERROR_DIVIDE_BY_ZERO = 1;
 }
 ```
 
----
+Rules:
+- Package name in file must match path.
+- Keep AIDL as single source of truth for cross-process API.
+- Add error codes/constants here if clients need them.
 
-### `Android.bp` — Build Rules
+#### 3.2 What the build generates from AIDL
+From `aidl_interface "lobo_calculator_aidl"`, Soong generates:
 
-**What:** Five build targets in one file.
+- **Java/Kotlin side**
+  - `ICalculatorService.Stub` (server-side binder adapter class)
+  - `ICalculatorService.Stub.Proxy` (client-side object that marshals calls into Binder transactions)
+- **NDK/C++ side**
+  - `BnCalculatorService` (server-side base class to inherit)
+  - `BpCalculatorService` / interface proxy (client-side binder proxy)
 
-**Why:** Keeps all build rules co-located with the source.
+Conceptually:
+- **Stub / Bn** = receives parcels from Binder, calls your real implementation.
+- **Proxy / Bp** = caller-facing object; when you call `add(2,3)`, it writes parcel + transacts.
 
-**How:** Each target and what it produces:
+#### 3.3 How service side uses Stub/Bn
+In C++ service:
+- `CalculatorServiceImpl` inherits generated `BnCalculatorService`.
+- You implement real methods (`add`, `divide`, etc.).
+- In `main.cpp`, you create the implementation and register it with `AServiceManager_addService`.
 
-| Target | Type | Output | Used by |
-|--------|------|--------|---------|
-| `lobo_calculator_aidl` | `aidl_interface` | C++ NDK stubs + Java stubs | everything below |
-| `calculatord` | `cc_binary` | `/vendor/bin/calculatord` | init (started at boot) |
-| `liblobo_calculator_client` | `cc_library_static` | `.a` static lib | other C++ services |
-| `CalculatorJavaClient` | `java_library` | `.jar` | Android apps / Java services |
-| `VtsCalculatorServiceTest` | `cc_test` | `/vendor/bin/VtsCalculatorServiceTest` | VTS test runner |
+This is server binding:
+1. Binder receives transaction code.
+2. Generated `BnCalculatorService` decodes args.
+3. Calls your `CalculatorServiceImpl::add(...)`.
+4. Encodes return value and sends reply.
 
-```
-aidl_interface "lobo_calculator_aidl"
-    ndk backend  →  lobo_calculator_aidl-ndk   (used by cc_binary, cc_library_static, cc_test)
-    java backend →  lobo_calculator_aidl-java  (used by java_library)
-```
+#### 3.4 How app/client side uses Proxy
+In app:
+- Get raw binder handle from `ServiceManager.checkService(serviceName)`.
+- Convert binder to typed interface with `ICalculatorService.Stub.asInterface(binder)`.
+- Returned object is local implementation (if same process) or `Proxy` (if remote process).
 
----
+When app calls:
+`service.add(2, 3)`
 
-### `calculator.rc` — Init Script
+under the hood:
+1. Proxy writes interface token + args into `Parcel`.
+2. Proxy calls `transact(...)`.
+3. Remote service executes implementation.
+4. Reply parcel is read and converted back to return value.
 
-**What:** Tells Android's `init` process how to start `calculatord` at boot.
+#### 3.5 Simple mental model
+- `.aidl` = API contract.
+- `Stub/Bn` = "receiver/decoder" side.
+- `Proxy/Bp` = "sender/encoder" side.
+- Your class (`CalculatorServiceImpl`) = business logic.
 
-**Why:** `init` is the process manager on Android. Without an `.rc` file, the daemon
-is never started, even if the binary is installed.
-
-**How:** Installed via `PRODUCT_COPY_FILES` in `device.mk` to
-`/vendor/etc/init/calculator.rc`. Key settings:
-
-```
-service calculatord /vendor/bin/calculatord
-    class main          ← starts with the main Android boot class
-    user system         ← runs as system UID (not root)
-    group system
-    # no 'oneshot' → init restarts it automatically if it crashes
-```
-
----
-
-### `ICalculator.h` — Abstract C++ Interface
-
-**What:** Pure-virtual C++ interface (`ICalculator`) with four methods.
-
-**Why:** Separates the contract from the Binder implementation. A mock or alternative
-implementation (for unit tests) can inherit `ICalculator` without touching Binder.
-
-**How:** `CalculatorServiceImpl` inherits from the AIDL-generated
-`BnCalculatorService` (not from `ICalculator` directly), but both express the same
-contract. `ICalculator.h` is the human-readable version; `BnCalculatorService` is
-the generated version.
-
----
-
-### `CalculatorServiceImpl.h` / `CalculatorServiceImpl.cpp` — The Implementation
-
-**What:** Concrete class that inherits from `BnCalculatorService` and implements the
-four operations.
-
-**Why:** `BnCalculatorService` is the AIDL-generated server stub. Inheriting it means
-the Binder driver can dispatch incoming IPC calls to these methods automatically.
-
-**How:** Each method receives the parameters, does the math, writes the result into
-`_aidl_return`, and returns `ndk::ScopedAStatus::ok()`. Divide-by-zero returns a
-`ServiceSpecificException` with code `ERROR_DIVIDE_BY_ZERO`:
-
-```cpp
-ndk::ScopedAStatus CalculatorServiceImpl::divide(int32_t a, int32_t b, int32_t* out) {
-    if (b == 0) {
-        return ndk::ScopedAStatus::fromServiceSpecificError(
-                ICalculatorService::ERROR_DIVIDE_BY_ZERO);
-    }
-    *out = a / b;
-    return ndk::ScopedAStatus::ok();
-}
-```
+#### 3.6 Adding a new AIDL method (beginner checklist)
+1. Add method to `ICalculatorService.aidl`.
+2. Implement in `CalculatorServiceImpl.h/.cpp`.
+3. Update C++ client wrapper (`CalculatorClient.h/.cpp`) if used.
+4. Update app-side client interface (`ICalculatorClient.kt`) and implementation.
+5. Rebuild modules.
+6. Test from UI and from VTS.
 
 ---
 
-### `main.cpp` — Daemon Entry Point
+## 4) Build and Product Wiring
 
-**What:** The `main()` function — the process that `init` starts.
+### What
+The feature requires both module build rules and product copy/import wiring.
 
-**Why:** A Binder service must register itself with `ServiceManager` and then block
-waiting for incoming calls. Without `ABinderProcess_joinThreadPool()` the process
-would exit immediately.
+### Why
+If either side is missing, common failures occur:
+- daemon binary built but never started (`.rc` not copied/imported)
+- app built but service not reachable
+- policy present but wrong service labeling
 
-**How:** Four steps every Binder daemon must do:
+### How
 
-```
-1. ABinderProcess_setThreadPoolMaxThreadCount(4)   ← allow 4 concurrent calls
-2. ABinderProcess_startThreadPool()                ← start the binder thread pool
-3. AServiceManager_addService(impl, "service.name") ← register with ServiceManager
-4. ABinderProcess_joinThreadPool()                 ← block forever (process incoming calls)
-```
+#### Service and AIDL modules
+- File: `vendor/lobo/services/calculator/Android.bp`
+- Key modules:
+  - `aidl_interface "lobo_calculator_aidl"` (NDK + Java backend)
+  - `cc_binary "calculatord"` (vendor daemon)
+  - `cc_library_static "liblobo_calculator_client"`
+  - `cc_test "VtsCalculatorServiceTest"`
 
----
+#### App module
+- File: `vendor/lobo/apps/system/CalculatorClientApp/Android.bp`
+- Important flags:
+  - `vendor: true`
+  - `privileged: true`
+  - `sdk_version: "current"` (required for vendor app build rules)
 
-### `CalculatorClient.h` / `CalculatorClient.cpp` — C++ Client
-
-**What:** A wrapper class that hides Binder connection details from other C++ services.
-
-**Why:** Other services (e.g. FanControlService) should call `client.add(a, b)` — not
-deal with `AServiceManager_checkService`, `fromBinder`, `ScopedAStatus` directly.
-
-**How:** `ensureConnected()` lazily looks up the service on first use. If the service
-isn't running yet, it logs an error and returns 0. All four operations follow the
-same pattern:
-
-```
-CalculatorClient::add(a, b)
-    → ensureConnected()  → AServiceManager_checkService("com.lobo…")
-    → mService->add(a, b, &result)  [Binder IPC]
-    → return result
-```
+#### Init wiring (car target)
+- `projects/rpi5_custom_car/device.mk` must copy:
+  - `calculator.rc` -> `/vendor/etc/init/calculator.rc`
+  - `init/hw/init.rpi5.rc` -> `/vendor/etc/init/hw/init.rpi5.rc`
+- `projects/rpi5_custom_car/init/hw/init.rpi5.rc` must import:
+  - `import /vendor/etc/init/calculator.rc`
 
 ---
 
-### `ICalculatorClient.kt` / `CalculatorClientImpl.kt` — Kotlin Client
+## 5) SELinux Model
 
-**What:** Kotlin interface + implementation for Android apps and Java services.
+### What
+SELinux labels both the daemon process and the service_manager entry.
 
-**Why:** Android apps are Java/Kotlin. They cannot use the C++ client library. They
-get the same `add/subtract/multiply/divide` API via Kotlin.
+### Why
+Without correct types/attributes, either:
+- `calculatord` fails to register, or
+- app cannot `find`/call the service due to `neverallow`.
 
-**How:** `CalculatorClientImpl` uses `ServiceManager.checkService()` (Android
-framework API) to get the Binder, then `ICalculatorService.Stub.asInterface(binder)`
-to get the generated Kotlin proxy. The `service` property is initialized lazily via
-`by lazy {}`.
-
-```
-App calls: CalculatorClientImpl().add(5, 3)
-    → ServiceManager.checkService("com.lobo.platform.calculator.ICalculatorService")
-    → ICalculatorService.Stub.asInterface(binder)
-    → proxy.add(5, 3)  [Binder IPC]
-    → returns 8
-```
+### How
+- `calculator.te` defines daemon domain and service_manager registration permissions.
+- `service_contexts` maps service name to `calculatord_service`.
+- `service.te` defines `calculatord_service` with required attributes, notably `app_api_service`.
+- `calculatorclientapp.te` grants `find` on `calculatord_service` for the app domain.
 
 ---
 
-### `sepolicy/` — SELinux Policy
+## 6) AIDL Integration Issues and Final Decisions
 
-**What:** Four files that grant the daemon exactly the permissions it needs — no more.
+### What
+These are the key issues faced during calculator AIDL integration and how they were resolved.
 
-**Why:** Android enforces SELinux Mandatory Access Control. Without these files,
-`calculatord` cannot start, cannot register with ServiceManager, and apps cannot
-reach it.
+### Why
+Documenting them avoids repeating hard-to-debug Soong/Binder/SELinux failures.
 
-**How — file by file:**
+### How
 
-| File | What it defines |
-|------|-----------------|
-| `calculator.te` | Process domain `calculatord` — allows init to launch it, allows Binder IPC, allows registering as a service |
-| `service.te` | Service type `calculatord_service` — marks it as `app_api_service` so untrusted apps can call it |
-| `file_contexts` | Labels `/vendor/bin/calculatord` as `calculatord_exec` so init can transition into `calculatord` domain |
-| `service_contexts` | Labels the ServiceManager entry `com.lobo.platform.calculator.ICalculatorService` as `calculatord_service` |
+1. **`platform_apis` + `sdk_version` conflict in app**
+   - Issue: Soong rejects both set together.
+   - Decision: keep `sdk_version: "current"` and remove `platform_apis`.
+   - Reason: vendor/product partition interface enforcement requires SDK usage.
 
-The flow: `init` sees `/vendor/bin/calculatord` labelled `calculatord_exec` →
-transitions process into `calculatord` domain → `calculator.te` allows it to call
-`AServiceManager_addService` → ServiceManager entry gets label `calculatord_service`
-from `service_contexts` → `service.te` allows apps to find and call it.
+2. **Java AIDL backend API mismatch**
+   - Issue: generated Java AIDL defaulted to `system_current`, app compiled with `current`.
+   - Decision: set Java backend `sdk_version: "current"` in `aidl_interface`.
+   - Reason: consistent API surface between generated stubs and app code.
 
----
+3. **Hidden API usage (`ServiceManager`)**
+   - Issue: direct hidden API imports are not stable for vendor app compile surface.
+   - Decision: `CalculatorClientImpl` uses reflection for `ServiceManager.checkService`.
+   - Reason: compile-safe access while still using system service lookup.
 
-### `VtsCalculatorServiceTest.cpp` — VTS Tests
+4. **Binder stability mismatch (`vendor` vs `system`)**
+   - Issue seen in logcat:
+     - `Cannot do a user transaction on a vendor stability binder ... in a system stability context`
+   - Decision: wrap `IBinder` in app and OR `FLAG_PRIVATE_VENDOR (0x10000000)` on transact.
+   - Reason: app side uses Java/system Binder context while service is vendor-stability NDK Binder.
 
-**What:** Vendor Test Suite (VTS) tests that run on the device against the live service.
-
-**Why:** VTS tests verify the real Binder interface on real hardware — not mocks. If
-the service is broken on the device, VTS catches it.
-
-**How:**
-
-```
-Build:  m VtsCalculatorServiceTest
-Run:    atest VtsCalculatorServiceTest
-```
-
-Test coverage:
-- `add`, `subtract`, `multiply`, `divide` — basic correctness
-- Divide-by-zero — verifies `ServiceSpecificException` with `ERROR_DIVIDE_BY_ZERO = 1`
-- Concurrency — 8 threads × 100 calls simultaneously (no data races)
-- Stability — 1000 repeated calls without errors
+5. **SELinux `neverallow` around service type attributes**
+   - Issue: removing `app_api_service` from service type breaks app `find`.
+   - Decision: keep `calculatord_service` compatible with app discovery by including `app_api_service`.
+   - Reason: aligns with platform policy rules for app-visible binder services.
 
 ---
 
-## Full Runtime Call Flow
+## 7) `adb` Verification and Debugging Commands
 
+### What
+Commands to verify registration, process health, and runtime calls.
+
+### Why
+Calculator failures can come from different layers (init, SELinux, Binder, app UI). These commands isolate each layer quickly.
+
+### How
+
+#### Service/process state
+```bash
+adb shell ps -A | grep -i calculatord
+adb shell pidof calculatord
+adb shell service list | grep -i ICalculatorService
+adb shell pidof com.lobo.platform.calculator.client
 ```
-Boot
- │
- ├── init reads /vendor/etc/init/calculator.rc
- ├── spawns /vendor/bin/calculatord  (SELinux: calculatord_exec → calculatord domain)
- └── calculatord:
-       ABinderProcess_startThreadPool()
-       AServiceManager_addService(impl, "com.lobo.platform.calculator.ICalculatorService")
-       ABinderProcess_joinThreadPool()   ← waiting for calls
+Verify: `calculatord` PID exists, app PID exists when app is open, and service list shows `com.lobo.platform.calculator.ICalculatorService`.
 
-
-App / Service calls add(5, 3):
- │
- ├── [Kotlin] CalculatorClientImpl.add(5, 3)
- │     ServiceManager.checkService("com.lobo.platform.calculator.ICalculatorService")
- │     ICalculatorService.Stub.asInterface(binder)
- │     proxy.add(5, 3)
- │
- ├── [C++]    CalculatorClient::add(5, 3)
- │     AServiceManager_checkService(...)
- │     ICalculatorService::fromBinder(binder)
- │     mService->add(5, 3, &result)
- │
- └── [Binder IPC — kernel driver routes to calculatord thread]
-       CalculatorServiceImpl::add(5, 3, &out)
-         *out = 5 + 3 = 8
-         return ndk::ScopedAStatus::ok()
-       → result 8 returned to caller
+#### SELinux domains (portable grep, no ripgrep dependency)
+```bash
+adb shell ps -Z | grep -Ei "calculatorclientapp|calculatord"
 ```
+Verify: output shows expected domains for `calculatord` and `calculatorclientapp` (not `u:r:untrusted_app` for the privileged app target).
+
+#### Fresh runtime logs for a test session
+```bash
+adb logcat -c
+adb shell am start -W -n com.lobo.platform.calculator.client/.ui.MainActivity
+# perform Add/Subtract/etc in UI
+adb logcat -d | grep -Ei "Cannot do a user transaction|ICalculatorService|CalculatorClientImpl|service unavailable|calculatord"
+```
+Verify: no `Cannot do a user transaction ... vendor stability ... system stability` line, and no `service unavailable` errors during button actions.
+
+#### Optional binder call smoke test via app launch + service visibility
+```bash
+adb shell service check com.lobo.platform.calculator.ICalculatorService
+```
+Verify: result should not be `not found`.
+
+#### Common interpretation
+- `service list` entry present + `calculatord` pid present = daemon started and registered.
+- `Cannot do a user transaction ... vendor stability ... system stability` = binder stability mismatch path.
+- `service unavailable` from app logs = lookup/proxy unavailable at app side.
 
 ---
 
-## Adding a New Operation
+## 8) Build and Flash/Deploy Quick Reference
 
-1. Add the method to `ICalculatorService.aidl`
-2. Implement it in `CalculatorServiceImpl.cpp`
-3. Declare it in `CalculatorServiceImpl.h`
-4. Add it to `ICalculator.h`
-5. Add the wrapper in `CalculatorClient.cpp` / `CalculatorClient.h`
-6. Add the wrapper in `CalculatorClientImpl.kt` / `ICalculatorClient.kt`
-7. Add a VTS test in `VtsCalculatorServiceTest.cpp`
+### What
+Minimal command set to rebuild calculator modules and validate on device.
+
+### Why
+Fast iteration reduces time spent rebuilding full images.
+
+### How
+On build server:
+```bash
+cd /root/lobo-aosp/raspi5-aosp
+source build/envsetup.sh
+lunch rpi5_custom_car-trunk_staging-userdebug
+
+# Module-only iteration
+m CalculatorClientApp calculatord -j$(nproc)
+
+# If policy/init/product wiring changed, rebuild vendor image
+make vendorimage -j$(nproc)
+```
+Verify: build ends with `build completed successfully`, and outputs are present under `out/target/product/rpi5_custom_car/vendor/`.
+
+Then flash/deploy using your normal device flow for this target.
+
+---
+
+## 9) UI Notes (Car Display)
+
+### What
+The client app UI is tuned for car displays with top and bottom bars.
+
+### Why
+AAOS launcher/system bars reduce usable vertical space and can clip labels.
+
+### How
+- Theme uses no action bar.
+- Buttons use compact heights.
+- Layout keeps enough bottom padding to avoid nav bar overlap.
+- If a device skin still clips top content, tune top padding in
+  `activity_calculator_client.xml`.
 
 ---
 

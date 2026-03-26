@@ -1,0 +1,23 @@
+#
+# Lobo overlay for rpi5_custom_car.
+#
+# This file is copied into:
+#   /vendor/etc/init/hw/init.rpi5.rc
+#
+# Upstream vendor init only imports init.rpi5.usb.rc.
+# We add an import for our Binder service definition so init actually starts
+# `calculatord` at boot.
+#
+
+import /vendor/etc/init/calculator.rc
+import /vendor/etc/init/hw/init.rpi5.usb.rc
+
+on init
+    symlink /sdcard /storage/sdcard0
+
+on fs
+    mount_all /vendor/etc/fstab.rpi5 --early
+
+on late-fs
+    mount_all /vendor/etc/fstab.rpi5 --late
+
