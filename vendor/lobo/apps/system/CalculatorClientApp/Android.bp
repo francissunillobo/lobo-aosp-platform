@@ -5,6 +5,8 @@ android_app {
     srcs: ["src/main/java/**/*.kt"],
     resource_dirs: ["res"],
     manifest: "AndroidManifest.xml",
+    // Vendor + PRODUCT_ENFORCE_PRODUCT_PARTITION_INTERFACE requires sdk_version.
+    // platform_apis conflicts with non-empty sdk_version; Service lookup uses reflection in code.
     sdk_version: "current",
     min_sdk_version: "33",
     certificate: "platform",

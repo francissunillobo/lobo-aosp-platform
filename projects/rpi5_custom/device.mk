@@ -7,7 +7,8 @@
 # FanControlService, FanSettingsService, NameService, MySystemApp, MyUserApp
 # are temporarily disabled until calculatord builds and runs successfully.
 PRODUCT_PACKAGES += \
-    calculatord
+    calculatord \
+    CalculatorClientApp
 
 # Install init rc files via PRODUCT_COPY_FILES to avoid Soong/Make bridge conflict
 PRODUCT_COPY_FILES += \

@@ -1,4 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Calculator Client</string>
+    <string name="calculator_description">Calls calculatord over Binder (ICalculatorService).</string>
+    <string name="label_a">First value (A)</string>
+    <string name="label_b">Second value (B)</string>
+    <string name="hint_number_a">Enter integer for A</string>
+    <string name="hint_number_b">Enter integer for B</string>
+    <string name="op_add">Add</string>
+    <string name="op_subtract">Subtract</string>
+    <string name="op_multiply">Multiply</string>
+    <string name="op_divide">Divide</string>
+    <string name="label_result">Result</string>
+    <string name="result_placeholder">—</string>
+    <string name="error_parse">Enter valid integers for A and B.</string>
+    <string name="error_service">Calculator service unavailable. Is calculatord running?</string>
+    <string name="error_divide_zero">Divide by zero (from service).</string>
 </resources>
