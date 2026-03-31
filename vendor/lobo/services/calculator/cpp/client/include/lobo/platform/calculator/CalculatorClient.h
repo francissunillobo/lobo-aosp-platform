@@ -15,7 +15,7 @@ namespace calculator {
  * C++ client wrapper for ICalculatorService.
  *
  * Hides Binder connection details from callers.
- * Other C++ services (e.g. FanControlService) use this class
+ * Other C++ components can use this class
  * instead of talking to the Binder proxy directly.
  *
  * Usage:

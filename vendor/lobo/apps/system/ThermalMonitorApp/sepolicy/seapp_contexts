@@ -1,0 +1,2 @@
+# Assign com.lobo.platform.thermalmonitor.client to thermalmonitorapp (platform-signed priv-app).
+user=_app seinfo=platform name=com.lobo.platform.thermalmonitor.client domain=thermalmonitorapp type=app_data_file levelFrom=user

@@ -1,0 +1,8 @@
+// Copyright (C) 2026 Lobo Platform
+// SPDX-License-Identifier: Apache-2.0
+
+cc_library_headers {
+    name: "liblobo_temperature_monitor_hal_headers",
+    vendor: true,
+    export_include_dirs: ["include"],
+}

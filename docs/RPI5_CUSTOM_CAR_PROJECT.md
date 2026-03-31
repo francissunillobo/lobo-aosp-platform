@@ -318,11 +318,10 @@ To add a new Lobo service or app to the car build, edit `device.mk` only:
 ```makefile
 PRODUCT_PACKAGES += \
     calculatord \
-    FanControlService      ← add here
+    CalculatorClientApp    ← add more packages here
 
 PRODUCT_COPY_FILES += \
-    vendor/lobo/services/calculator/calculator.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/calculator.rc \
-    vendor/lobo/services/fancontrol/fancontrol.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/fancontrol.rc
+    vendor/lobo/services/calculator/calculator.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/calculator.rc
 ```
 
 Do **not** add packages to `rpi5_custom_car.mk` — that file only sets identity and

@@ -1,0 +1,19 @@
+# Copyright (C) 2026 Lobo Platform
+# SPDX-License-Identifier: Apache-2.0
+
+type temperature_monitord, domain;
+type temperature_monitord_exec, exec_type, vendor_file_type, file_type;
+
+init_daemon_domain(temperature_monitord)
+
+binder_use(temperature_monitord)
+binder_service(temperature_monitord)
+
+add_service(temperature_monitord, temperature_monitord_service)
+
+# Linux thermal sysfs. Many devices (including RPi5) expose
+# /sys/class/thermal and zone nodes as u:object_r:sysfs:s0, not sysfs_thermal.
+allow temperature_monitord sysfs_thermal:dir r_dir_perms;
+allow temperature_monitord sysfs_thermal:file r_file_perms;
+allow temperature_monitord sysfs:dir r_dir_perms;
+allow temperature_monitord sysfs:file r_file_perms;

@@ -1,5 +1,0 @@
-service name_service /vendor/bin/NameService
-    class hal
-    user system
-    group system
-    oneshot

@@ -1,0 +1,10 @@
+# Copyright (C) 2026 Lobo Platform
+# SPDX-License-Identifier: Apache-2.0
+
+service temperature_monitord /vendor/bin/temperature_monitord
+    class main
+    user system
+    group system
+
+on init
+    start temperature_monitord

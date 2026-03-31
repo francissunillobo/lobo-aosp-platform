@@ -1,5 +1,0 @@
-service fancontrol /vendor/bin/FanControlService
-    class hal
-    user system
-    group system
-    oneshot

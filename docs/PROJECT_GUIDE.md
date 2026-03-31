@@ -1,7 +1,7 @@
 # Lobo AOSP Platform — Complete Project Guide
 
 **Author:** Francis Lobo
-**Last updated:** 2026-03-21
+**Last updated:** 2026-03-29
 **Target hardware:** Raspberry Pi 5
 **Android version:** Android 16 (android-16.0.0_r3)
 
@@ -25,6 +25,7 @@
 12. [Flashing to Raspberry Pi 5](#12-flashing-to-raspberry-pi-5)
 13. [Adding a new hardware target](#13-adding-a-new-hardware-target)
 14. [Known issues and lessons learned](#14-known-issues-and-lessons-learned)
+15. [Related documentation](#15-related-documentation)
 
 ---
 
@@ -37,9 +38,9 @@ It is built on top of:
 - **raspberry-vanilla** — a community project that ports AOSP to Raspberry Pi hardware
 
 On top of these, Lobo adds:
-- Custom system services (Fan Control, Name Service)
-- Custom apps (MySystemApp, MyUserApp)
-- RPi5-specific hardware abstraction layers (HAL) for fan and thermal control
+- Custom system services (e.g. calculatord reference service, temperature_monitord)
+- Custom apps (MySystemApp, MyUserApp, ThermalMonitorApp, etc.)
+- Vendor HAL and daemon stack for thermal monitoring (`vendor/lobo/hal/`, `temperature_monitord`)
 - A clean, multi-target architecture so the same code can run on future hardware (VIM3, etc.)
 
 ---
@@ -126,90 +127,48 @@ This is the main repository. It contains all Lobo-specific code.
 ```
 lobo-aosp-platform/
 │
-├── vendor/lobo/                          ← Common code (shared across all hardware targets)
-│   ├── Android.mk                        ← Registers rpi5_custom product with AOSP
+├── vendor/lobo/                          ← Platform code (bind-mounted into AOSP `vendor/lobo/`)
+│   ├── Android.mk                        ← Product discovery comments only (see §6)
 │   ├── vendorsetup.sh                    ← Sourced by AOSP envsetup.sh automatically
 │   │
-│   ├── common/
-│   │   ├── cpp/
-│   │   │   ├── logging/                  ← liblobo_logging (C++ static library)
-│   │   │   │   ├── Android.bp
-│   │   │   │   ├── include/lobo/platform/logging/Logging.h
-│   │   │   │   ├── src/Logging.cpp
-│   │   │   │   └── tests/src/LoggingTest.cpp
-│   │   │   ├── fan_math/                 ← liblobo_fan_math (C++ static library)
-│   │   │   │   ├── Android.bp
-│   │   │   │   ├── include/lobo/platform/fan_math/FanMath.h
-│   │   │   │   ├── src/FanMath.cpp
-│   │   │   │   └── tests/src/FanMathTest.cpp
-│   │   │   └── types/                    ← liblobo_types_headers (header-only library)
-│   │   │       ├── Android.bp
-│   │   │       └── include/lobo/platform/types/CommonTypes.h
-│   │   └── java/                         ← lobo-common-java (Kotlin/Java library)
+│   ├── client/                           ← App-facing API glue (Binder clients; one tree per domain)
+│   │   └── thermalcontrol/               ← `lobo-client-thermalcontrol-java` (ThermalControlManager, etc.)
 │   │       ├── Android.bp
-│   │       └── src/main/java/com/lobo/platform/common/
-│   │           ├── fanmath/              ← FanMath API + implementation
-│   │           ├── logging/              ← Logger API + implementation
-│   │           └── types/               ← CommonTypes, Constants
+│   │       └── java/src/main/java/com/lobo/platform/client/thermalcontrol/…
+│   │
+│   ├── hal/                              ← HAL headers + board implementations (not under `projects/`)
+│   │   ├── interfaces/                   ← Hardware-abstract C++ interface (`ITemperatureMonitorHal.h`)
+│   │   │   ├── Android.bp
+│   │   │   └── include/lobo/platform/hal/
+│   │   └── rpi5/temperature_monitor/     ← RPi5 sysfs-backed reader used by `temperature_monitord`
+│   │       ├── Android.bp
+│   │       ├── include/…
+│   │       └── src/
 │   │
 │   ├── services/
-│   │   ├── fancontrol/                   ← FanControlService (C++ daemon)
-│   │   │   ├── Android.bp
-│   │   │   ├── fancontrol.rc             ← init script (starts service at boot)
-│   │   │   ├── aidl/                     ← IFanService.aidl (binder interface)
-│   │   │   ├── core/                     ← FanService, FanController, ThermalConfig
-│   │   │   ├── hal_bridge/               ← FanHalBridge (talks to hardware HAL)
-│   │   │   ├── thermal/                  ← ThermalPolicy (temperature thresholds)
-│   │   │   ├── sepolicy/                 ← SELinux policy for this service
-│   │   │   └── tests/                    ← Unit tests
-│   │   ├── fan_settings_service/         ← FanSettingsService (Android app, vendor)
-│   │   │   ├── Android.bp
-│   │   │   ├── AndroidManifest.xml
-│   │   │   ├── fan_settings_service.rc   ← init script
-│   │   │   ├── aidl/                     ← IFanSettingsService.aidl
-│   │   │   ├── src/main/java/            ← Kotlin source
-│   │   │   ├── res/                      ← Android resources
-│   │   │   └── sepolicy/
-│   │   └── name_service/                 ← NameService (C++ + Java, vendor)
-│   │       ├── Android.bp
-│   │       ├── name_service.rc
-│   │       ├── aidl/                     ← INameService.aidl
-│   │       ├── cpp/core/                 ← C++ service implementation
-│   │       ├── cpp/client/               ← C++ client library
-│   │       ├── java/                     ← Kotlin client library
-│   │       └── sepolicy/
+│   │   ├── calculator/                   ← calculatord (reference AIDL + native service)
+│   │   └── temperature_monitor/          ← temperature_monitord (AIDL, C++ core, sepolicy, init rc)
 │   │
 │   └── apps/
-│       ├── system/MySystemApp/           ← Privileged system app (signed with platform key)
-│       │   ├── Android.bp
-│       │   ├── AndroidManifest.xml
-│       │   ├── src/main/java/            ← Kotlin source (MVP pattern)
-│       │   ├── res/
-│       │   └── sepolicy/
-│       └── user/MyUserApp/               ← Regular user app
-│           ├── Android.bp
-│           ├── AndroidManifest.xml
-│           ├── src/main/java/            ← Kotlin source (MVP pattern)
-│           └── res/
+│       ├── system/
+│       │   ├── ThermalMonitorApp/        ← Privileged thermal UI (uses `lobo-client-thermalcontrol-java`)
+│       │   ├── CalculatorClientApp/    ← Sample client for calculatord
+│       │   └── MySystemApp/              ← Other privileged system app samples
+│       └── user/
+│           └── MyUserApp/                ← Regular user app sample
 │
-└── projects/rpi5_custom/                 ← RPi5-specific config (device-specific)
+└── projects/rpi5_custom/                 ← Product overlay only (Makefiles, packages, init snippets)
     ├── AndroidProducts.mk                ← Declares lunch targets for this product
     ├── rpi5_custom.mk                    ← Main product definition (inherits aosp_rpi5.mk)
-    ├── device.mk                         ← Package list and file copies
+    ├── device.mk                         ← PRODUCT_PACKAGES / PRODUCT_COPY_FILES
     ├── BoardConfig.mk                    ← Board-level config (inherits rpi5 BoardConfig)
-    └── hal/
-        ├── interfaces/                   ← Abstract HAL interfaces (hardware-independent)
-        │   ├── Android.bp
-        │   └── include/lobo/platform/hal/
-        │       ├── IFanHal.h             ← Abstract fan interface
-        │       └── IThermalHal.h         ← Abstract thermal interface
-        └── fan/                          ← RPi5-specific fan HAL implementation
-            ├── Android.bp
-            ├── include/lobo/platform/hal/rpi5/FanHalRpi5.h
-            └── src/
-                ├── FanHalRpi5.cpp        ← Fan control via GPIO
-                └── FanHalGpio.cpp        ← GPIO pin control
+    └── init/hw/init.rpi5.rc              ← Optional product-specific init hooks
 ```
+
+**Note:** There is no `lobo-common-java` umbrella and no `vendor/lobo/common/` tree in the
+current tree. Apps depend on explicit modules (for example `lobo-client-thermalcontrol-java`,
+`lobo_calculator_aidl-java`). Optional shared C++ / Java under `vendor/lobo/common/` is
+added only when a guideline calls for it — see `docs/FOLDER_STRUCTURE_GUIDELINES.md`.
 
 ---
 
@@ -404,20 +363,20 @@ in `rpi5_custom.mk` only.
 **Location:** `projects/rpi5_custom/BoardConfig.mk`
 **Purpose:** Board-level hardware configuration. Inherits all RPi5 board settings
 from `device/brcm/rpi5/BoardConfig.mk` and adds only Lobo-specific overrides
-(e.g. loading the `lobo_fan.ko` kernel module).
+(for example extra `BOARD_VENDOR_SEPOLICY_DIRS` entries for vendor services and apps).
 **Important:** Never set `PRODUCT_NAME` here — only set it in `rpi5_custom.mk`.
 
 ### `Android.bp` files
 Used by Soong (AOSP's modern build system) to define each module:
-- `cc_binary` — C++ executable (FanControlService, NameService)
-- `cc_library_static` — C++ static library (liblobo_logging, liblobo_fan_math)
-- `cc_library_headers` — header-only library (liblobo_types_headers, lobo_hal_interfaces)
-- `android_app` — Android application (FanSettingsService, MySystemApp, MyUserApp)
-- `java_library` — Java/Kotlin library (lobo-common-java)
+- `cc_binary` — C++ executable (e.g. calculatord, temperature_monitord)
+- `cc_library_static` — C++ static library linked into a binary (e.g. HAL impl consumed by a daemon)
+- `cc_library_headers` — header-only library (e.g. `liblobo_temperature_monitor_hal_headers` under `vendor/lobo/hal/interfaces/`)
+- `android_app` — Android application (e.g. MySystemApp, MyUserApp, CalculatorClientApp, ThermalMonitorApp)
+- `java_library` — Java/Kotlin library (e.g. per-feature client glue like `lobo-client-thermalcontrol-java`)
 - `aidl_interface` — AIDL Binder interface definition
 
 ### `.rc` files (init scripts)
-Files like `fancontrol.rc` and `name_service.rc` tell Android's `init` process
+Files like `calculator.rc` tell Android's `init` process
 to start your services at boot. They are copied to `/vendor/etc/init/` on the device.
 
 ### `.te` files (SELinux policy)
@@ -525,9 +484,8 @@ lunch rpi5_custom-trunk_staging-userdebug
 make bootimage systemimage vendorimage -j$(nproc) 2>&1 | tee ~/build-android16.log
 
 # Build specific modules only (faster for development)
-make FanControlService NameService -j$(nproc)
+make calculatord CalculatorClientApp -j$(nproc)
 make MySystemApp MyUserApp -j$(nproc)
-make FanSettingsService -j$(nproc)
 
 # Check for errors in build log
 grep -E "error:|FAILED" ~/build-android16.log | head -50
@@ -579,7 +537,7 @@ The single `.img` file contains all partitions:
 |---|---|
 | `boot` | Linux kernel + ramdisk (first thing RPi5 loads) |
 | `system` | Android framework, apps, services |
-| `vendor` | Hardware drivers, HALs (GPU, WiFi, camera, fan) |
+| `vendor` | SoC/board vendor image (BSP bits, firmware, vendor HALs, Treble partitions) |
 
 The ramdisk is bundled inside `boot.img`. You do not need to flash partitions
 separately — the `.img` file handles everything.
@@ -591,10 +549,11 @@ separately — the `.img` file handles everything.
 The architecture is designed for this. Steps:
 
 1. Create `projects/vim3_custom/` in `lobo-aosp-platform` (similar to `rpi5_custom/`):
-   include `vim3_custom.mk`, `AndroidProducts.mk`, `BoardConfig.mk`, `device.mk`,
-   and VIM3-specific HAL under `hal/`. Follow the naming rule
-   `projects/vim3_custom/vim3_custom.mk` — `vendor/lobo/Android.mk` picks it up
-   automatically; you do **not** edit `vendor/lobo/` to add a new board.
+   include `vim3_custom.mk`, `AndroidProducts.mk`, `BoardConfig.mk`, `device.mk`
+   (product overlay only). Add board-specific implementations under
+   `vendor/lobo/hal/<board>/` and wire them from the daemon or service — not under
+   `projects/`. Follow the naming rule `projects/vim3_custom/vim3_custom.mk` —
+   `vendor/lobo/Android.mk` picks it up automatically.
 2. Sync a new AOSP tree: `/root/lobo-aosp/vim3-aosp/`
 3. Create bind mounts:
 ```bash
@@ -610,8 +569,8 @@ sudo mount --bind \
     /root/lobo-aosp/vim3-aosp/vendor/projects/vim3_custom
 ```
 
-`vendor/lobo/` (common code) is shared automatically.
-`projects/vim3_custom/` contains only VIM3-specific board config and HAL.
+`vendor/lobo/` (shared platform code + HAL trees) is mounted into every AOSP tree.
+`projects/vim3_custom/` contains only VIM3 product Makefiles and package lists.
 `raspi5-aosp` never sees `vim3_custom/` and vice versa.
 
 ---
@@ -645,6 +604,35 @@ Android 15+ requires three-part lunch targets: `product-release-variant`.
 If a module has no UI resources, use `java_library` not `android_library`.
 `android_library` always requires an `AndroidManifest.xml`.
 
+### Soong: “One culprit glob: vendor/lobo/common/thermalcontrol/…”
+**What:** After moving Java sources (e.g. thermal client from `common/thermalcontrol` to `client/thermalcontrol`), Soong may still mention an old `**/*.kt` glob under the previous path.
+
+**Why:** A leftover empty tree or an old `Android.bp` on disk keeps that path in the glob set until it is removed and Soong regenerates.
+
+**How:** From the AOSP tree (bind-mounted `vendor/lobo` is fine):
+```bash
+rm -rf vendor/lobo/common/thermalcontrol
+```
+Or run the script with your **real** paths (example for the Hetzner layout):
+```bash
+/root/lobo-aosp/lobo-aosp-platform/scripts/cleanup-stale-lobo-vendor-dirs.sh /root/lobo-aosp/raspi5-aosp
+```
+`prepare-rpi5-custom-car-build.sh` runs this helper automatically. If the message persists, run `m nothing` or a trivial `make` after cleanup.
+
+### `find: device/google/.../overlay/... No such file or directory`
+**What:** Harmless messages during packaging or resource rules that probe optional Google device overlay paths.
+
+**Why:** The generic AOSP build iterates paths that exist only in full Google device checkouts; Raspberry Pi / trimmed trees often omit those directories.
+
+**How:** Ignore unless you are building a Google device target. No change required in `lobo-aosp-platform`.
+
+### Ninja: `rpiboot` — “outputs should be files, not directories” / `Missing restat`
+**What:** Warnings while building `$(PRODUCT_OUT)/rpiboot` (RPi5 boot FAT contents) before `boot.img`.
+
+**Why:** Community `device/brcm/rpi5` rules treat `rpiboot` as a directory build step; Ninja sometimes warns when a declared output is a directory or when timestamps interact with `restat`.
+
+**How:** If `boot.img` and `vendor.img` still build and **`#### build completed successfully ####`** appears, treat as **noise**. A proper fix belongs in the upstream `device/brcm/rpi5` makefile (outside Lobo platform). Do not patch `device/brcm/rpi5` in your fork unless you maintain that delta.
+
 ### Build log is essential
 Always use `tee` to save build output:
 ```bash
@@ -676,3 +664,20 @@ current foreground user, which can hide the real issue.
    ```bash
    adb shell am start --user 10 -a android.intent.action.MAIN -c android.intent.category.HOME
    ```
+
+---
+
+## 15. Related documentation
+
+**What:** Pointers to other formal docs in `docs/` that go deeper than this guide on specific subsystems.
+
+**Why:** This guide stays broad; architecture and module-specific build/runtime detail live in focused files so they can evolve without bloating the main TOC.
+
+**How:** Open the path from the repo root (`lobo-aosp-platform/…`).
+
+| Doc | Subject |
+|-----|---------|
+| `docs/DOCUMENTATION_STYLE.md` | What / Why / How convention for new docs |
+| `docs/FOLDER_STRUCTURE_GUIDELINES.md` | Canonical `vendor/lobo/` and `projects/` layout |
+| `docs/CALCULATOR_SERVICE.md` | Reference pattern: vendor Binder daemon + AIDL + client app |
+| `docs/THERMAL_MONITORING_ARCHITECTURE.md` | Thermal monitoring: HAL interface vs RPi5 impl, daemon, notifications |

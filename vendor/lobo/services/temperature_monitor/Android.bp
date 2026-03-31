@@ -1,0 +1,67 @@
+// Copyright (C) 2026 Lobo Platform
+// SPDX-License-Identifier: Apache-2.0
+
+aidl_interface {
+    name: "lobo_temperature_monitor_aidl",
+    vendor_available: true,
+    unstable: true,
+    srcs: [
+        "aidl/com/lobo/platform/temperaturemonitor/ThermalZoneReading.aidl",
+        "aidl/com/lobo/platform/temperaturemonitor/ITemperatureMonitorCallback.aidl",
+        "aidl/com/lobo/platform/temperaturemonitor/ITemperatureMonitorService.aidl",
+    ],
+    local_include_dir: "aidl",
+    backend: {
+        cpp: {
+            enabled: false,
+        },
+        ndk: {
+            enabled: true,
+            // Soong adds -DBINDER_STABILITY_SUPPORT for vendor NDK AIDL, which ORs
+            // FLAG_PRIVATE_VENDOR into Bp transacts. That forces a VENDOR stability
+            // check on the remote Java callback (SYSTEM), so onReadingsChanged fails.
+            // Undef so daemon→app callback uses FLAG_ONEWAY only; platform libbinder
+            // getLocalLevel() is SYSTEM and the transaction is allowed.
+            cflags: ["-UBINDER_STABILITY_SUPPORT"],
+        },
+        // Java/Kotlin client stubs — lobo-client-thermalcontrol-java links lobo_temperature_monitor_aidl-java.
+        java: {
+            enabled: true,
+            sdk_version: "current",
+        },
+        rust: {
+            enabled: false,
+        },
+    },
+    frozen: false,
+}
+
+// Binder daemon core (AIDL + polling + callbacks). No board HAL — each product
+// provides a small cc_binary that links this + one of liblobo_temperature_monitor_hal_*.
+cc_library_static {
+    name: "liblobo_temperature_monitord_core",
+    vendor: true,
+    srcs: [
+        "cpp/core/src/TemperatureMonitorServiceImpl.cpp",
+        "cpp/core/src/Run.cpp",
+    ],
+    local_include_dirs: ["cpp/core/include"],
+    export_include_dirs: ["cpp/core/include"],
+    shared_libs: [
+        "libbinder_ndk",
+        "liblog",
+    ],
+    // Pull in all AIDL-generated objects (Bn*, parcelables). Thin LTO on the
+    // core .o can otherwise drop cross-lib references at the final link.
+    whole_static_libs: [
+        "lobo_temperature_monitor_aidl-ndk",
+    ],
+    header_libs: [
+        "liblobo_temperature_monitor_hal_headers",
+    ],
+    cflags: [
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+    ],
+}

@@ -1,0 +1,4 @@
+# Copyright (C) 2026 Lobo Platform
+# SPDX-License-Identifier: Apache-2.0
+
+type temperature_monitord_service, app_api_service, system_api_service, service_manager_type;

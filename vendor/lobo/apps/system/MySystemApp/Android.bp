@@ -8,5 +8,4 @@ android_app {
     sdk_version: "current",
     min_sdk_version: "33",
     certificate: "platform",
-    static_libs: ["lobo-common-java"],
 }

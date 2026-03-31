@@ -1,0 +1,15 @@
+// Copyright (C) 2026 Lobo Platform
+// SPDX-License-Identifier: Apache-2.0
+//
+// App-side glue to vendor thermal daemon (temperature_monitord).
+// Lives under client/<feature>/ — not under projects/ or common umbrella jars.
+
+java_library {
+    name: "lobo-client-thermalcontrol-java",
+    vendor: true,
+    srcs: ["java/src/main/java/**/*.kt"],
+    sdk_version: "current",
+    static_libs: [
+        "lobo_temperature_monitor_aidl-java",
+    ],
+}

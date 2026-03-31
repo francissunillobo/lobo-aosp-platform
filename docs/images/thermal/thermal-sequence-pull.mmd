@@ -1,0 +1,9 @@
+sequenceDiagram
+  participant VM as ThermalMonitorViewModel
+  participant Mgr as ThermalControlManagerImpl
+  participant D as temperature_monitord
+
+  VM->>Mgr: getCurrentReadings()
+  Mgr->>D: getCurrentReadings()
+  D-->>Mgr: ThermalZoneReading[]
+  Mgr-->>VM: Array for UI rows

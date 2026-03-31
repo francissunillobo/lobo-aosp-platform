@@ -1,0 +1,35 @@
+// Copyright (C) 2026 Lobo Platform
+// SPDX-License-Identifier: Apache-2.0
+
+// Board-specific: sysfs HAL + thin main() that injects this HAL into the shared daemon.
+// VIM3 (or others): mirror this file under vendor/lobo/hal/<board>/temperature_monitor/
+// with a different cc_binary name (e.g. temperature_monitord_vim3) and stem "temperature_monitord".
+
+cc_library_static {
+    name: "liblobo_temperature_monitor_hal_rpi5",
+    vendor: true,
+    srcs: ["src/TemperatureMonitorHalRpi5.cpp"],
+    local_include_dirs: ["include"],
+    export_include_dirs: ["include"],
+    header_libs: ["liblobo_temperature_monitor_hal_headers"],
+    cflags: ["-Wall", "-Wextra", "-Werror"],
+}
+
+cc_binary {
+    name: "temperature_monitord_rpi5",
+    stem: "temperature_monitord",
+    vendor: true,
+    srcs: ["main.cpp"],
+    shared_libs: [
+        "libbinder_ndk",
+        "liblog",
+    ],
+    static_libs: [
+        "liblobo_temperature_monitord_core",
+        "liblobo_temperature_monitor_hal_rpi5",
+    ],
+    header_libs: [
+        "liblobo_temperature_monitor_hal_headers",
+    ],
+    cflags: ["-Wall", "-Wextra", "-Werror"],
+}

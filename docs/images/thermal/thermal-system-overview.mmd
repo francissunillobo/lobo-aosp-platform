@@ -1,0 +1,22 @@
+flowchart LR
+  subgraph kernel [Kernel]
+    sysfs["/sys/class/thermal/thermal_zone*"]
+  end
+  subgraph vendor_hal [vendor/lobo/hal]
+    hal["ITemperatureMonitorHal impl e.g. RPi5 sysfs reader"]
+  end
+  subgraph daemon [vendor/lobo/services/temperature_monitor]
+    core["liblobo_temperature_monitord_core poll + notify"]
+    aidl["AIDL: ITemperatureMonitorService / Callback"]
+  end
+  subgraph sm [Binder]
+    svc["ServiceManager registration"]
+  end
+  subgraph app [ThermalMonitorApp + client lib]
+    mgr["ThermalControlManagerImpl"]
+    vm["ThermalMonitorViewModel"]
+  end
+  sysfs --> hal --> core
+  core --> aidl --> svc
+  mgr <--> svc
+  mgr --> vm

@@ -5,4 +5,6 @@
 
 # Vendor SELinux for calculatord and CalculatorClientApp (same as car product).
 BOARD_VENDOR_SEPOLICY_DIRS += vendor/lobo/services/calculator/sepolicy
+BOARD_VENDOR_SEPOLICY_DIRS += vendor/lobo/services/temperature_monitor/sepolicy
 BOARD_VENDOR_SEPOLICY_DIRS += vendor/lobo/apps/system/CalculatorClientApp/sepolicy
+BOARD_VENDOR_SEPOLICY_DIRS += vendor/lobo/apps/system/ThermalMonitorApp/sepolicy

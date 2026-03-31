@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Thermal Monitor</string>
+    <string name="status_disconnected">Not connected to temperature_monitord.</string>
+    <string name="status_connected">Connected.</string>
+    <string name="label_poll">Poll interval (ms)</string>
+    <string name="label_threshold">Notify threshold (m°C)</string>
+    <string name="label_zones">Zones</string>
+    <string name="zones_empty">No readings yet.</string>
+    <string name="btn_apply">Apply settings</string>
+    <string name="hint_poll">Poll ms</string>
+    <string name="hint_threshold">Threshold m°C</string>
+    <string name="error_invalid_number">Enter valid integers for poll and threshold, or leave blank to skip.</string>
+</resources>

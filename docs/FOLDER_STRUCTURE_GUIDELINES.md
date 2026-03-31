@@ -133,19 +133,21 @@ COMMON_LUNCH_CHOICES contains products not defined in this file
 Reusable C++ code shared by two or more services or HALs. Compiled as a static
 library. Examples: `liblobo_logging`, `liblobo_fan_math`.
 
+**Common modules (`common/<feature>/`):** Each feature (e.g. `logger`, `fan_math`, `types`)
+uses the same layout as `services/calculator/`: `common/<feature>/Android.bp` plus
+`cpp/` (and optional `java/`). There is no top-level `common/cpp/` or `common/java/`.
+Each `common/<feature>/` Java/Kotlin primitive is its own `java_library` module; apps depend on
+the specific modules they use (no umbrella aggregator module).
+
 ```
-common/cpp/<library-name>/
+common/<feature>/
 ├── Android.bp
-├── include/
-│   └── lobo/
-│       └── platform/
-│           └── <library-name>/
-│               └── MyHeader.h          ← public API headers only
-├── src/
-│   └── MyImpl.cpp                      ← implementation
-└── tests/
-    └── src/
-        └── MyLibraryTest.cpp
+├── cpp/
+│   ├── include/lobo/platform/<feature>/…   ← public headers (export root = cpp/include)
+│   ├── src/*.cpp
+│   └── tests/src/*Test.cpp                 ← optional
+└── java/                                   ← optional Kotlin/Java
+    └── src/main/java/com/lobo/platform/common/<feature>/…
 ```
 
 ### Why
@@ -156,7 +158,7 @@ including `"Logging.h"` would get whichever the compiler finds first. The full p
 `lobo/platform/logging/Logging.h` is unique across the entire AOSP tree.
 
 **`src/` separated from `include/`:**
-`Android.bp` lists `srcs: ["src/*.cpp"]`. Implementation files must not go into
+`Android.bp` lists paths like `srcs: ["cpp/src/*.cpp"]`. Implementation files must not go into
 `include/` — that directory is exported to consumers and should contain only headers.
 
 **`tests/src/` co-located with the library:**
@@ -169,13 +171,13 @@ module self-contained — when you delete a module you delete its tests automati
 cc_library_static {
     name: "liblobo_<library-name>",    ← must start with liblobo_
     vendor: true,
-    srcs: ["src/*.cpp"],
-    export_include_dirs: ["include"],  ← exports the include/ root
+    srcs: ["cpp/src/*.cpp"],
+    export_include_dirs: ["cpp/include"],  ← exports the include root
     cflags: ["-Wall", "-Werror"],
 }
 ```
 
-`export_include_dirs: ["include"]` exports the `include/` directory root. Consumers
+`export_include_dirs: ["cpp/include"]` exports the include root. Consumers
 get `lobo/platform/<library-name>/` as their include path automatically. They write:
 
 ```cpp
@@ -190,23 +192,16 @@ get `lobo/platform/<library-name>/` as their include path automatically. They wr
 ### What
 
 Reusable Kotlin/Java code shared across apps and services on the Java side. Compiled
-as a `java_library`. Example: `lobo-common-java`.
+as `java_library` modules per feature. Apps depend on the exact client and primitive
+libraries they need (shared primitives from `common/<feature>/`, and Binder glue from
+`vendor/lobo/client/<feature>/`).
 
-```
-common/java/
-├── Android.bp
-└── src/
-    └── main/
-        └── java/
-            └── com/
-                └── lobo/
-                    └── platform/
-                        └── <feature>/
-                            ├── api/
-                            │   └── MyInterface.kt
-                            └── impl/
-                                └── MyImpl.kt
-```
+**`common/<feature>/java/src/main/java/...`** — shared primitives (logging, math, types);
+same **`api/`** / **`impl/`** conventions.
+
+**`vendor/lobo/client/<feature>/java/src/main/java/...`** — client libraries that talk to
+**`services/`** over Binder/AIDL (e.g. **`lobo-client-thermalcontrol-java`**). Same
+**`api/`** / **`impl/`** layout; Java package typically **`com.lobo.platform.client.<feature>`**.
 
 ### Why
 
@@ -235,7 +230,7 @@ This split allows test code to implement the `api/` interface (mock) without tou
 
 ```
 java_library {
-    name: "lobo-common-java",          ← prefix: lobo- with hyphen (Java convention)
+    name: "lobo-<feature>-java",       ← example: `lobo-client-thermalcontrol-java`
     vendor: true,
     srcs: ["src/main/java/**/*.kt"],
     sdk_version: "current",
@@ -249,7 +244,7 @@ java_library {
 ### What
 
 A background process started by `init` at boot, exposing operations over Android
-Binder IPC. Examples: `calculatord`, `FanControlService`, `NameService`.
+Binder IPC. Examples: `calculatord`.
 
 ```
 services/<service-name>/
@@ -313,6 +308,17 @@ The Kotlin client library for Android apps. It lives inside the service folder b
 it is part of the service definition (same AIDL, same package). It is NOT an app —
 it is a library. It follows the same `src/main/java/` rule as Section 3.
 
+**Thermal monitoring / `ThermalControlManager` (cross-reference):**
+A **thermal-only** Kotlin/Java helper co-located with the daemon may live under
+`vendor/lobo/services/temperature_monitor/java/src/main/java/` using this same layout.
+**`ThermalControlManager`** (one façade that will bind to **`temperature_monitord`** and
+**`fancontrold`**) belongs under **`vendor/lobo/client/thermalcontrol/java/src/main/java/`**
+— **`client/<feature>/java/`** is for **app–service glue** (Binder, AIDL stubs, managers).
+**`common/<feature>/`** stays for **shared primitives** (logger, types, fan_math), not this IPC façade.
+Implemented as **`lobo-client-thermalcontrol-java`**; see **`docs/THERMAL_MONITORING_ARCHITECTURE.md`** §9–§10.
+Do **not** create `vendor/lobo/common/java/<feature>/` — there is **no** top-level
+`common/java/` directory.
+
 **`sepolicy/` — all four files are mandatory:**
 
 | File | What | Why it is required |
@@ -351,7 +357,7 @@ cc_test        { name: "Vts<Service>Test" }           ← VTS tests
 ### What
 
 A service implemented as an Android `Service` component (bound or started), packaged
-as an APK. Example: `FanSettingsService`.
+as an APK. Example: `CalculatorClientApp`.
 
 ```
 services/<service-name>/
@@ -497,7 +503,7 @@ android_app {
     manifest: "AndroidManifest.xml",
     sdk_version: "current",
     certificate: "platform",
-    static_libs: ["lobo-common-java"],
+    static_libs: ["lobo-client-thermalcontrol-java"],
 }
 ```
 
@@ -543,7 +549,7 @@ android_app {
     resource_dirs: ["res"],
     manifest: "AndroidManifest.xml",
     sdk_version: "current",
-    static_libs: ["lobo-common-java"],
+    static_libs: ["lobo-client-thermalcontrol-java"],
 }
 ```
 
@@ -614,7 +620,7 @@ COMMON_LUNCH_CHOICES += \
 | Layer | C++ module name | Java module name | Package |
 |-------|----------------|------------------|---------|
 | Common C++ lib | `liblobo_<name>` | — | — |
-| Common Java lib | — | `lobo-common-java` | `com.lobo.platform.common.<name>` |
+| Shared Java primitive lib | — | `lobo-common-<name>-java` | `com.lobo.platform.common.<name>` |
 | Service AIDL | `lobo_<service>_aidl` | — | `com.lobo.platform.<service>` |
 | Service daemon | `<service>d` | — | — |
 | Service C++ client | `liblobo_<service>_client` | — | — |

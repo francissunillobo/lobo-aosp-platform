@@ -1,5 +1,0 @@
-service fan_settings_service /system/bin/app_process /system/app \
-    com.lobo.platform.fansettings.impl.FanSettingsService
-    class main
-    user system
-    group system

@@ -1,0 +1,22 @@
+flowchart TB
+  subgraph hal_layer [Board HAL — vendor/lobo/hal]
+    H["ITemperatureMonitorHal.h headers"]
+    R["rpi5/temperature_monitor HAL + temperature_monitord_rpi5 main"]
+  end
+  subgraph svc_layer [Daemon core — vendor/lobo/services/temperature_monitor]
+    C["TemperatureMonitorServiceImpl.cpp"]
+    A["AIDL: ThermalZoneReading, ITemperatureMonitorCallback, ITemperatureMonitorService"]
+    RC["temperature_monitor.rc + sepolicy"]
+  end
+  subgraph client_layer [Client — vendor/lobo/client/thermalcontrol]
+    J["ThermalControlManagerImpl.kt + VendorPrivateBinder for service calls"]
+  end
+  subgraph ui_layer [App — vendor/lobo/apps/system/ThermalMonitorApp]
+    U["MainActivity + ThermalMonitorViewModel"]
+  end
+  H --> C
+  R --> C
+  C --> A
+  A --> J
+  J --> U
+  RC --> C

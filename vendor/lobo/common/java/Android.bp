@@ -1,6 +1,0 @@
-java_library {
-    name: "lobo-common-java",
-    vendor: true,
-    srcs: ["src/main/java/**/*.kt"],
-    sdk_version: "current",
-}

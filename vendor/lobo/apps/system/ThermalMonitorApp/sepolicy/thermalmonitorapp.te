@@ -1,0 +1,11 @@
+# Copyright (C) 2026 Lobo Platform
+# SPDX-License-Identifier: Apache-2.0
+
+type thermalmonitorapp, domain;
+app_domain(thermalmonitorapp)
+
+binder_use(thermalmonitorapp)
+
+binder_call(thermalmonitorapp, temperature_monitord)
+binder_call(temperature_monitord, thermalmonitorapp)
+allow thermalmonitorapp temperature_monitord_service:service_manager find;

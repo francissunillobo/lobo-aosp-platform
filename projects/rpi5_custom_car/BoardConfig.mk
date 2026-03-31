@@ -6,7 +6,9 @@
 # so the build compiles .te, file_contexts, and service_contexts into the image.
 # Without this, init refuses to start vendor services (undefined domain).
 BOARD_VENDOR_SEPOLICY_DIRS += vendor/lobo/services/calculator/sepolicy
+BOARD_VENDOR_SEPOLICY_DIRS += vendor/lobo/services/temperature_monitor/sepolicy
 BOARD_VENDOR_SEPOLICY_DIRS += vendor/lobo/apps/system/CalculatorClientApp/sepolicy
+BOARD_VENDOR_SEPOLICY_DIRS += vendor/lobo/apps/system/ThermalMonitorApp/sepolicy
 
 # Disable Android Verified Boot (AVB).
 # RPi5 bootloader does not support AVB. Disabling it allows adb remount to work

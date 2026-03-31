@@ -1,5 +1,0 @@
-type name_service, domain;
-type name_service_exec, exec_type, vendor_file_type, file_type;
-
-init_daemon_domain(name_service)
-allow name_service binder_device:chr_file rw_file_perms;

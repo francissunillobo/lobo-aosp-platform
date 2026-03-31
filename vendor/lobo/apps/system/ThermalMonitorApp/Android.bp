@@ -1,0 +1,19 @@
+// Copyright (C) 2026 Lobo Platform
+// SPDX-License-Identifier: Apache-2.0
+
+android_app {
+    name: "ThermalMonitorApp",
+    vendor: true,
+    privileged: true,
+    srcs: ["src/main/java/**/*.kt"],
+    resource_dirs: ["res"],
+    manifest: "AndroidManifest.xml",
+    sdk_version: "current",
+    min_sdk_version: "33",
+    certificate: "platform",
+    static_libs: [
+        "lobo-client-thermalcontrol-java",
+        "androidx.appcompat_appcompat",
+        "androidx.activity_activity-ktx",
+    ],
+}

@@ -1,0 +1,10 @@
+#
+# Lobo overlay for rpi5_custom.
+#
+# Copied to /vendor/etc/init/hw/init.rpi5.rc so vendor services under
+# /vendor/etc/init/*.rc are imported (upstream may not glob-import them).
+#
+
+import /vendor/etc/init/calculator.rc
+import /vendor/etc/init/temperature_monitor.rc
+import /vendor/etc/init/hw/init.rpi5.usb.rc

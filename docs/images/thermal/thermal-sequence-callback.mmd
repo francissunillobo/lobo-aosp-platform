@@ -1,0 +1,23 @@
+sequenceDiagram
+  participant App as ThermalMonitorApp
+  participant Mgr as ThermalControlManagerImpl
+  participant SM as ServiceManager
+  participant D as temperature_monitord
+  participant HAL as ITemperatureMonitorHal
+
+  App->>Mgr: connect() / registerListener()
+  Mgr->>SM: checkService(ITemperatureMonitorService)
+  SM-->>Mgr: Binder
+  Mgr->>Mgr: ITemperatureMonitorService.Stub.asInterface(VendorPrivateBinder(binder))
+  Mgr->>D: registerCallback(ITemperatureMonitorCallback stub)
+  D-->>Mgr: ok
+
+  loop Poll thread
+    D->>HAL: readSamples()
+    HAL-->>D: samples
+    D->>D: shouldNotify(old, new, threshold)?
+    alt notify
+      D->>App: onReadingsChanged (oneway) — see §7.1 for transact details
+      App->>App: ThermalMonitorViewModel.applyReadings()
+    end
+  end

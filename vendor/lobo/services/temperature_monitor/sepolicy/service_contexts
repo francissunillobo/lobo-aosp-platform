@@ -1,0 +1,4 @@
+# Copyright (C) 2026 Lobo Platform
+# SPDX-License-Identifier: Apache-2.0
+
+com.lobo.platform.temperaturemonitor.ITemperatureMonitorService    u:object_r:temperature_monitord_service:s0

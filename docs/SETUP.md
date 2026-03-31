@@ -176,7 +176,7 @@ lunch rpi5_custom-trunk_staging-userdebug
 make bootimage systemimage vendorimage -j$(nproc) 2>&1 | tee ~/build-android16.log
 
 # Build specific modules only
-make FanControlService NameService MySystemApp MyUserApp FanSettingsService -j$(nproc)
+make calculatord CalculatorClientApp MySystemApp MyUserApp -j$(nproc)
 
 # Check errors
 grep -E "error:|FAILED" ~/build-android16.log | head -50
