@@ -92,7 +92,8 @@ Run `~/scripts/normal-mode.sh` after the build completes.
 │   ├── vendor/
 │   │   ├── lobo/              ← BIND MOUNT → lobo-aosp-platform/vendor/lobo/
 │   │   └── projects/
-│   │       └── rpi5_custom/   ← BIND MOUNT → lobo-aosp-platform/projects/rpi5_custom/
+│   │       ├── rpi5_custom/       ← BIND MOUNT → lobo-aosp-platform/projects/rpi5_custom/
+│   │       └── rpi5_custom_car/   ← BIND MOUNT → lobo-aosp-platform/projects/rpi5_custom_car/
 │   └── out/                   ← build output (generated, gitignored)
 │       └── target/product/rpi5/
 │           ├── boot.img
@@ -271,8 +272,8 @@ sudo umount /root/lobo-aosp/raspi5-aosp/vendor/projects/rpi5_custom
 
 ## 8. Product inheritance chain
 
-When you run `lunch rpi5_custom-trunk_staging-userdebug`, Android loads
-product configuration in this chain:
+When you run one of the RPi5 lunch targets, Android loads product
+configuration through one of these chains:
 
 ```
 lunch rpi5_custom-trunk_staging-userdebug
@@ -288,16 +289,30 @@ lunch rpi5_custom-trunk_staging-userdebug
             └── vendor/projects/rpi5_custom/device.mk    ← YOUR packages + PRODUCT_COPY_FILES
 ```
 
+```
+lunch rpi5_custom_car-trunk_staging-userdebug
+    │
+    └── vendor/projects/rpi5_custom_car/rpi5_custom_car.mk   ← YOUR car product definition
+            │
+            ├── device/brcm/rpi5/aosp_rpi5_car.mk            ← raspberry-vanilla RPi5 car product
+            │       │
+            │       └── device/brcm/rpi5/device.mk           ← RPi5 packages and overlays
+            │               │
+            │               └── AOSP base (full_base.mk, etc.)
+            │
+            └── vendor/projects/rpi5_custom_car/device.mk    ← YOUR car packages + PRODUCT_COPY_FILES
+```
+
 **What this means:**
-`rpi5_custom.mk` inherits two things:
-1. `aosp_rpi5.mk` — gets kernel, GPU drivers, WiFi, audio, full Android framework from raspberry-vanilla
-2. `device.mk` — adds your Lobo `PRODUCT_PACKAGES` and `PRODUCT_COPY_FILES` (init `.rc` files)
+Both product mk files inherit two things:
+1. Upstream base product (`aosp_rpi5.mk` or `aosp_rpi5_car.mk`) — kernel, GPU, WiFi, audio, framework, and car stack for the car variant
+2. Lobo `device.mk` under `vendor/projects/<product>/` — your `PRODUCT_PACKAGES` and `PRODUCT_COPY_FILES`
 
 `$(call inherit-product, ...)` always uses paths relative to the AOSP tree root (`$TOP`).
-After the bind mount, `lobo-aosp-platform/projects/rpi5_custom/` is visible as
-`vendor/projects/rpi5_custom/` from `$TOP`, so the path is exactly:
+After bind mounts, product overlays are visible from `$TOP` under `vendor/projects/`, for example:
 ```makefile
 $(call inherit-product, vendor/projects/rpi5_custom/device.mk)
+$(call inherit-product, vendor/projects/rpi5_custom_car/device.mk)
 ```
 
 You never modify `device/brcm/rpi5/` — that is raspberry-vanilla's code.
@@ -321,7 +336,7 @@ Currently minimal — bind mounts make special flags unnecessary.
 Including the same files from here would duplicate work and can break `lunch`.
 
 ### `AndroidProducts.mk`
-**Location:** `projects/rpi5_custom/AndroidProducts.mk` (one per board)
+**Location:** `projects/rpi5_custom/AndroidProducts.mk` and `projects/rpi5_custom_car/AndroidProducts.mk`
 **Purpose:** Must define **`PRODUCT_MAKEFILES`** (which `<name>.mk` is this product)
 and **`COMMON_LUNCH_CHOICES`** (`lunch` combos) **in the same file**. AOSP’s
 `envsetup` validates that every lunch choice references a product makefile declared
@@ -338,6 +353,12 @@ COMMON_LUNCH_CHOICES += \
     rpi5_custom-trunk_staging-userdebug \
     rpi5_custom-trunk_staging-user \
     rpi5_custom-trunk_staging-eng
+
+PRODUCT_MAKEFILES += $(LOCAL_DIR)/rpi5_custom_car.mk
+COMMON_LUNCH_CHOICES += \
+    rpi5_custom_car-trunk_staging-userdebug \
+    rpi5_custom_car-trunk_staging-user \
+    rpi5_custom_car-trunk_staging-eng
 ```
 
 ### `rpi5_custom.mk`
@@ -349,8 +370,14 @@ COMMON_LUNCH_CHOICES += \
 Sets `PRODUCT_NAME`, `PRODUCT_BRAND`, `PRODUCT_MODEL`, `PRODUCT_MANUFACTURER` here only.
 **Does NOT contain `PRODUCT_PACKAGES`** — that belongs exclusively in `device.mk`.
 
+### `rpi5_custom_car.mk`
+**Location:** `projects/rpi5_custom_car/rpi5_custom_car.mk`
+**Purpose:** Car product definition. Inherits:
+1. `device/brcm/rpi5/aosp_rpi5_car.mk` — raspberry-vanilla RPi5 car base
+2. `vendor/projects/rpi5_custom_car/device.mk` — Lobo car packages and `.rc` files
+
 ### `device.mk`
-**Location:** `projects/rpi5_custom/device.mk`
+**Location:** `projects/rpi5_custom/device.mk` and `projects/rpi5_custom_car/device.mk`
 **Purpose:** **Single place** for Lobo `PRODUCT_PACKAGES` and `PRODUCT_COPY_FILES`
 (init `.rc` files). It does **not** re-inherit `device/brcm/rpi5/device.mk` (that
 already comes from `aosp_rpi5.mk`). **Why:** avoids duplicating the same package
@@ -360,7 +387,7 @@ from `rpi5_custom.mk`). **How:** add packages or copy rules here; keep `PRODUCT_
 in `rpi5_custom.mk` only.
 
 ### `BoardConfig.mk`
-**Location:** `projects/rpi5_custom/BoardConfig.mk`
+**Location:** `projects/rpi5_custom/BoardConfig.mk` and `projects/rpi5_custom_car/BoardConfig.mk`
 **Purpose:** Board-level hardware configuration. Inherits all RPi5 board settings
 from `device/brcm/rpi5/BoardConfig.mk` and adds only Lobo-specific overrides
 (for example extra `BOARD_VENDOR_SEPOLICY_DIRS` entries for vendor services and apps).
@@ -432,6 +459,7 @@ Takes ~30 minutes on the Hetzner server.
 ```bash
 mkdir -p /root/lobo-aosp/raspi5-aosp/vendor/lobo
 mkdir -p /root/lobo-aosp/raspi5-aosp/vendor/projects/rpi5_custom
+mkdir -p /root/lobo-aosp/raspi5-aosp/vendor/projects/rpi5_custom_car
 
 sudo mount --bind \
     /root/lobo-aosp/lobo-aosp-platform/vendor/lobo \
@@ -440,12 +468,17 @@ sudo mount --bind \
 sudo mount --bind \
     /root/lobo-aosp/lobo-aosp-platform/projects/rpi5_custom \
     /root/lobo-aosp/raspi5-aosp/vendor/projects/rpi5_custom
+
+sudo mount --bind \
+    /root/lobo-aosp/lobo-aosp-platform/projects/rpi5_custom_car \
+    /root/lobo-aosp/raspi5-aosp/vendor/projects/rpi5_custom_car
 ```
 
 Add to `/etc/fstab` to persist across reboots:
 ```
 /root/lobo-aosp/lobo-aosp-platform/vendor/lobo  /root/lobo-aosp/raspi5-aosp/vendor/lobo  none  bind  0  0
 /root/lobo-aosp/lobo-aosp-platform/projects/rpi5_custom  /root/lobo-aosp/raspi5-aosp/vendor/projects/rpi5_custom  none  bind  0  0
+/root/lobo-aosp/lobo-aosp-platform/projects/rpi5_custom_car  /root/lobo-aosp/raspi5-aosp/vendor/projects/rpi5_custom_car  none  bind  0  0
 ```
 
 ### Step 8 — Source build environment
@@ -456,7 +489,11 @@ source build/envsetup.sh
 
 ### Step 9 — Select build target
 ```bash
+# Standard product
 lunch rpi5_custom-trunk_staging-userdebug
+
+# Car product
+lunch rpi5_custom_car-trunk_staging-userdebug
 ```
 
 ### Step 10 — Build
@@ -478,7 +515,11 @@ Output: `out/target/product/rpi5/RaspberryVanillaAOSP16-<date>-rpi5_car.img`
 # Always run these first in a new shell session
 cd /root/lobo-aosp/raspi5-aosp
 source build/envsetup.sh
+
+# Pick one target
 lunch rpi5_custom-trunk_staging-userdebug
+# or:
+# lunch rpi5_custom_car-trunk_staging-userdebug
 
 # Build only the 3 images needed for RPi5
 make bootimage systemimage vendorimage -j$(nproc) 2>&1 | tee ~/build-android16.log
